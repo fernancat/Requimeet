@@ -532,3 +532,78 @@ button.danger {
   padding-bottom: 6px;
   background: var(--bg-card);
 }
+
+/* --- Controles del anfitrion --- */
+.side-panel-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 340px;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.side-panel-stack .side-panel {
+  width: 100%;
+}
+
+.join-panel {
+  flex: 0 1 auto;
+  max-height: 45%;
+}
+
+.join-requests {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+}
+
+.join-requests li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--bg-input);
+  font-size: 14px;
+}
+
+.join-requests li.working {
+  opacity: 0.55;
+}
+
+.join-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.join-actions button {
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+.participant-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.moderation-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.moderation-actions button {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.toast {
+  border-color: var(--success);
+}

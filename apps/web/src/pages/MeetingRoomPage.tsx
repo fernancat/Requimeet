@@ -3,21 +3,36 @@ import { useNavigate } from 'react-router-dom';
 import { Track } from 'livekit-client';
 import { Socket } from 'socket.io-client';
 import type {
+  JoinRequestDto,
   ParticipantDto,
   ParticipantsPayload,
   ProcessingResult,
 } from '@requimeet/contracts';
 import { RT_EVENTS } from '@requimeet/contracts';
-import { getGuestSession, getHostToken, getMediaPrefs } from '../lib/auth';
+import { api, ApiError } from '../lib/api';
+import {
+  getGuestSession,
+  getHostToken,
+  getMeetingRole,
+  saveMeetingRole,
+} from '../lib/auth';
 import { createSocket } from '../lib/socket';
 import ChatPanel from '../features/chat/ChatPanel';
 import { useChat } from '../features/chat/useChat';
+import JoinRequestsPanel from '../features/meeting/JoinRequestsPanel';
 import { screenShareBlockReason } from '../features/meeting/media-controls';
 import ParticipantsPanel from '../features/meeting/ParticipantsPanel';
 import ParticipantTile from '../features/meeting/ParticipantTile';
+import { useJoinRequests } from '../features/meeting/useJoinRequests';
 import { ExitReason, useMeetingRoom } from '../features/meeting/useMeetingRoom';
 
 type Panel = 'none' | 'participants' | 'chat';
+
+interface SubscribeAck {
+  ok: boolean;
+  role?: 'host' | 'participant' | 'waiting';
+  pendingRequests?: JoinRequestDto[];
+}
 
 const EXIT_TEXT: Record<ExitReason, string> = {
   left: 'Saliste de la reunión',
@@ -27,7 +42,13 @@ const EXIT_TEXT: Record<ExitReason, string> = {
   error: 'La conexión se perdió',
 };
 
-export default function MeetingRoomPage({ code }: { code: string }) {
+export default function MeetingRoomPage({
+  code,
+  role,
+}: {
+  code: string;
+  role?: 'host' | 'participant';
+}) {
   const navigate = useNavigate();
   const hostToken = getHostToken();
   const guest = getGuestSession(code);
@@ -43,6 +64,12 @@ export default function MeetingRoomPage({ code }: { code: string }) {
   const [lastResult, setLastResult] = useState<ProcessingResult | null>(null);
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [copied, setCopied] = useState(false);
+  const [isHost, setIsHost] = useState(
+    role === 'host' || getMeetingRole(code) === 'host',
+  );
+  const [toast, setToast] = useState<string | null>(null);
+  const [moderationErrors, setModerationErrors] = useState<Record<string, string>>({});
+  const [confirmEnd, setConfirmEnd] = useState(false);
 
   const onLeave = useCallback(
     (reason: ExitReason) => setExitReason(reason),
@@ -53,13 +80,32 @@ export default function MeetingRoomPage({ code }: { code: string }) {
 
   const chat = useChat(code, token, socket, selfParticipantId, selfName, panel === 'chat');
 
+  const joinRequests = useJoinRequests(socket, code, token, isHost, (request) => {
+    setPanel((current) => {
+      if (current !== 'participants') {
+        setToast(`${request.displayName} solicita ingresar`);
+        setTimeout(() => setToast(null), 4000);
+      }
+      return current;
+    });
+  });
+
   // Socket del canal de tiempo real (participantes, cierres, resultados)
   useEffect(() => {
     if (!token) return;
     const s = createSocket(token);
     setSocket(s);
     s.on('connect', () => {
-      s.emit(RT_EVENTS.clientJoinMeetingChannel, { code }, () => {});
+      s.emit(RT_EVENTS.clientJoinMeetingChannel, { code }, (ack: SubscribeAck) => {
+        if (ack?.role === 'host') {
+          // La UI muestra controles; la autorizacion real la fuerza el servidor
+          setIsHost(true);
+          saveMeetingRole(code, 'host');
+          joinRequests.setInitial(ack.pendingRequests ?? []);
+        } else if (ack?.role) {
+          saveMeetingRole(code, 'participant');
+        }
+      });
     });
     s.on(RT_EVENTS.serverParticipants, (payload: ParticipantsPayload) => {
       setParticipants(payload.participants);
@@ -79,6 +125,7 @@ export default function MeetingRoomPage({ code }: { code: string }) {
       s.disconnect();
       setSocket(null);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code, token, selfParticipantId]);
 
   // Cierre total al salir/expulsar/finalizar
@@ -151,6 +198,44 @@ export default function MeetingRoomPage({ code }: { code: string }) {
     });
   }
 
+  /** Acciones de moderacion del host; errores 403/404/409 se muestran por fila. */
+  function moderate(action: 'mute' | 'kick') {
+    return async (participantId: string) => {
+      setModerationErrors((prev) => {
+        const next = { ...prev };
+        delete next[participantId];
+        return next;
+      });
+      try {
+        await api(`/meetings/${code}/participants/${participantId}/${action}`, {
+          method: 'POST',
+          token,
+        });
+      } catch (err) {
+        const message =
+          err instanceof ApiError
+            ? err.status === 403
+              ? 'Sin permiso'
+              : err.status === 404
+                ? 'Ya no está en la reunión'
+                : 'No se pudo aplicar'
+            : 'Error de red';
+        setModerationErrors((prev) => ({ ...prev, [participantId]: message }));
+      }
+    };
+  }
+
+  async function onEndMeeting() {
+    setConfirmEnd(false);
+    try {
+      await api(`/meetings/${code}/end`, { method: 'POST', token });
+      setExitReason('ended');
+    } catch {
+      setToast('No se pudo finalizar la reunión');
+      setTimeout(() => setToast(null), 4000);
+    }
+  }
+
   if (exitReason) {
     return (
       <div className="page">
@@ -191,8 +276,6 @@ export default function MeetingRoomPage({ code }: { code: string }) {
 
   const screenShareTiles = room.screenSharers;
   const hasScreenShare = screenShareTiles.length > 0;
-  const prefs = getMediaPrefs(code);
-  void prefs;
 
   return (
     <div className="room">
@@ -255,14 +338,32 @@ export default function MeetingRoomPage({ code }: { code: string }) {
           )}
         </div>
         {panel === 'participants' && (
-          <ParticipantsPanel
-            participants={participants}
-            selfParticipantId={selfParticipantId}
-            micState={micState}
-            sharingIdentities={sharingIdentities}
-            onSwitchDevice={room.switchDevice}
-            devices={devices}
-          />
+          <div className="side-panel-stack">
+            {isHost && (
+              <div className="side-panel join-panel">
+                <h3>Solicitudes ({joinRequests.pending.length})</h3>
+                <JoinRequestsPanel
+                  pending={joinRequests.pending}
+                  rowStates={joinRequests.rowStates}
+                  decide={joinRequests.decide}
+                />
+              </div>
+            )}
+            <ParticipantsPanel
+              participants={participants}
+              selfParticipantId={selfParticipantId}
+              micState={micState}
+              sharingIdentities={sharingIdentities}
+              onSwitchDevice={room.switchDevice}
+              devices={devices}
+              isHost={isHost}
+              hostActions={{
+                mute: moderate('mute'),
+                kick: moderate('kick'),
+                errors: moderationErrors,
+              }}
+            />
+          </div>
         )}
         {panel === 'chat' && (
           <ChatPanel
@@ -278,6 +379,7 @@ export default function MeetingRoomPage({ code }: { code: string }) {
       </main>
 
       {shareNotice && <div className="share-notice">{shareNotice}</div>}
+      {toast && <div className="share-notice toast">{toast}</div>}
 
       <footer className="room-controls">
         <button className={room.localMicOn ? 'secondary' : 'danger'} onClick={() => void room.toggleMic(!room.localMicOn)}>
@@ -294,12 +396,25 @@ export default function MeetingRoomPage({ code }: { code: string }) {
         </button>
         <button className={panel === 'participants' ? '' : 'secondary'} onClick={() => togglePanel('participants')}>
           Participantes
+          {isHost && joinRequests.pending.length > 0 && (
+            <span className="unread-badge">{joinRequests.pending.length}</span>
+          )}
         </button>
         <button className={panel === 'chat' ? '' : 'secondary'} onClick={() => togglePanel('chat')}>
           Chat
           {chat.unread > 0 && <span className="unread-badge">{chat.unread}</span>}
         </button>
-        <button className="danger" onClick={() => void room.leave()}>
+        {isHost &&
+          (confirmEnd ? (
+            <button className="danger" onClick={() => void onEndMeeting()}>
+              Finalizar para todos
+            </button>
+          ) : (
+            <button className="danger" onClick={() => setConfirmEnd(true)}>
+              Finalizar
+            </button>
+          ))}
+        <button className="secondary" onClick={() => void room.leave()}>
           Salir
         </button>
       </footer>
