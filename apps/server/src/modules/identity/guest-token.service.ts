@@ -22,14 +22,23 @@ export class GuestTokenService {
   }
 
   verify(token: string, meetingCode: string): GuestTokenPayload {
+    const payload = this.verifyAny(token);
+    if (payload.meetingCode !== meetingCode) {
+      throw new UnauthorizedException('guest token not valid for this meeting');
+    }
+    return payload;
+  }
+
+  /** Verifica sin atar a un meetingCode (el token ya lo lleva; p.ej. handshake de socket). */
+  verifyAny(token: string): GuestTokenPayload {
     let payload: GuestTokenPayload;
     try {
       payload = this.jwt.verify<GuestTokenPayload>(token);
     } catch {
       throw new UnauthorizedException('invalid guest token');
     }
-    if (payload.kind !== 'guest' || payload.meetingCode !== meetingCode) {
-      throw new UnauthorizedException('guest token not valid for this meeting');
+    if (payload.kind !== 'guest') {
+      throw new UnauthorizedException('not a guest token');
     }
     return payload;
   }

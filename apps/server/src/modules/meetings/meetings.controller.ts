@@ -7,21 +7,20 @@ import {
   Post,
   Query,
   Req,
-  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { Request } from 'express';
-import { AuthService } from '../identity/auth.service';
 import { GuestPrincipal, HostPrincipal } from '../identity/auth.types';
 import { GuestAuthGuard } from '../identity/guest-auth.guard';
 import { GuestTokenService } from '../identity/guest-token.service';
 import { HostAuthGuard } from '../identity/host-auth.guard';
+import { CallerResolver } from './caller-resolver';
 import {
   CreateJoinRequestDto,
   CreateMeetingDto,
   ListJoinRequestsQuery,
 } from './dto/meetings.dto';
-import { Caller, MeetingParticipantsService } from './meeting-participants.service';
+import { MeetingParticipantsService } from './meeting-participants.service';
 import { MeetingsService } from './meetings.service';
 
 type HostRequest = Request & { user: HostPrincipal };
@@ -32,7 +31,7 @@ export class MeetingsController {
   constructor(
     private readonly meetings: MeetingsService,
     private readonly participants: MeetingParticipantsService,
-    private readonly authService: AuthService,
+    private readonly callerResolver: CallerResolver,
     private readonly guestTokens: GuestTokenService,
   ) {}
 
@@ -113,7 +112,7 @@ export class MeetingsController {
 
   @Post(':code/leave')
   leave(@Param('code') code: string, @Req() req: Request) {
-    const caller = this.resolveCaller(req, code);
+    const caller = this.callerResolver.resolve(req, code);
     return caller.kind === 'host'
       ? this.meetings.leaveByHost(caller.hostUserId, code)
       : this.meetings.leaveByGuest(caller.guestSessionId, code);
@@ -121,7 +120,10 @@ export class MeetingsController {
 
   @Post(':code/media-token')
   mediaToken(@Param('code') code: string, @Req() req: Request) {
-    return this.participants.createMediaToken(this.resolveCaller(req, code), code);
+    return this.participants.createMediaToken(
+      this.callerResolver.resolve(req, code),
+      code,
+    );
   }
 
   @Post(':code/participants/:id/kick')
@@ -142,21 +144,6 @@ export class MeetingsController {
     @Param('id') id: string,
   ) {
     return this.participants.mute(req.user.hostUserId, code, id);
-  }
-
-  private resolveCaller(req: Request, code: string): Caller {
-    const token = this.bearerToken(req);
-    if (!token) {
-      throw new UnauthorizedException('missing bearer token');
-    }
-    try {
-      const host = this.authService.verifyHostToken(token);
-      return { kind: 'host', hostUserId: host.sub };
-    } catch {
-      // no es token de host; se intenta como invitado
-    }
-    const guest = this.guestTokens.verify(token, code);
-    return { kind: 'guest', guestSessionId: guest.sub };
   }
 
   private bearerToken(req: Request): string | null {
