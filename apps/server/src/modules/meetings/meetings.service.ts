@@ -2,6 +2,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -38,6 +39,8 @@ export interface JoinRequestCreated {
 
 @Injectable()
 export class MeetingsService {
+  private readonly logger = new Logger(MeetingsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly guestTokens: GuestTokenService,
@@ -60,6 +63,7 @@ export class MeetingsService {
         data: { status: 'active', startedAt: new Date() },
       });
       await this.ensureHostParticipant(updated);
+      this.logger.log(`reunion ${updated.code} iniciada`);
       this.events.emit(DOMAIN_EVENTS.meetingStarted, {
         meetingId: updated.id,
         code: updated.code,
@@ -81,6 +85,7 @@ export class MeetingsService {
       where: { id: meeting.id },
       data: { status: 'ended', endedAt: new Date() },
     });
+    this.logger.log(`reunion ${updated.code} finalizada`);
     this.events.emit(DOMAIN_EVENTS.meetingEnded, {
       meetingId: updated.id,
       code: updated.code,
@@ -251,6 +256,7 @@ export class MeetingsService {
     if (!updated) {
       return this.toJoinRequestDto(request);
     }
+    this.logger.log(`reunion ${meeting.code}: solicitud ${updated.id} -> ${updated.status}`);
     this.events.emit(DOMAIN_EVENTS.joinRequestDecided, {
       meetingId: meeting.id,
       meetingCode: meeting.code,

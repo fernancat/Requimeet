@@ -20,6 +20,7 @@ import {
   CreateMeetingDto,
   ListJoinRequestsQuery,
 } from './dto/meetings.dto';
+import { JoinRequestThrottleGuard } from './join-request-throttle.guard';
 import { MeetingParticipantsService } from './meeting-participants.service';
 import { MeetingsService } from './meetings.service';
 
@@ -59,6 +60,7 @@ export class MeetingsController {
   }
 
   @Post(':code/join-requests')
+  @UseGuards(JoinRequestThrottleGuard)
   createJoinRequest(
     @Param('code') code: string,
     @Body() dto: CreateJoinRequestDto,
