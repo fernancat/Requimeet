@@ -6,3 +6,4 @@ coverage/
 .DS_Store
 apps/web/dist/
 apps/server/prisma/*.db
+*.tsbuildinfo
