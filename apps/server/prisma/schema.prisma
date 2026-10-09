@@ -1,0 +1,86 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model HostUser {
+  id           String        @id @default(uuid())
+  email        String        @unique
+  passwordHash String
+  displayName  String
+  createdAt    DateTime      @default(now())
+  meetings     Meeting[]
+  participants Participant[]
+}
+
+model Meeting {
+  id           String        @id @default(uuid())
+  code         String        @unique
+  title        String
+  hostId       String
+  host         HostUser      @relation(fields: [hostId], references: [id])
+  status       String        @default("created")
+  createdAt    DateTime      @default(now())
+  startedAt    DateTime?
+  endedAt      DateTime?
+  joinRequests JoinRequest[]
+  participants Participant[]
+  messages     ChatMessage[]
+}
+
+model GuestSession {
+  id           String        @id @default(uuid())
+  displayName  String
+  createdAt    DateTime      @default(now())
+  expiresAt    DateTime
+  joinRequests JoinRequest[]
+  participants Participant[]
+}
+
+model JoinRequest {
+  id             String       @id @default(uuid())
+  meetingId      String
+  meeting        Meeting      @relation(fields: [meetingId], references: [id])
+  guestSessionId String
+  guestSession   GuestSession @relation(fields: [guestSessionId], references: [id])
+  displayName    String
+  status         String       @default("pending")
+  createdAt      DateTime     @default(now())
+  decidedAt      DateTime?
+  decidedById    String?
+  @@index([meetingId, status])
+}
+
+model Participant {
+  id             String        @id @default(uuid())
+  meetingId      String
+  meeting        Meeting       @relation(fields: [meetingId], references: [id])
+  hostUserId     String?
+  hostUser       HostUser?     @relation(fields: [hostUserId], references: [id])
+  guestSessionId String?
+  guestSession   GuestSession? @relation(fields: [guestSessionId], references: [id])
+  displayName    String
+  role           String
+  state          String        @default("admitted")
+  joinedAt       DateTime      @default(now())
+  leftAt         DateTime?
+  messages       ChatMessage[]
+  @@index([meetingId])
+}
+
+model ChatMessage {
+  id                  String      @id @default(uuid())
+  meetingId           String
+  meeting             Meeting     @relation(fields: [meetingId], references: [id])
+  authorParticipantId String
+  author              Participant @relation(fields: [authorParticipantId], references: [id])
+  authorName          String
+  body                String
+  clientRef           String
+  createdAt           DateTime    @default(now())
+  @@unique([meetingId, authorParticipantId, clientRef])
+}
