@@ -1,0 +1,20 @@
+{
+  "name": "requimeet",
+  "private": true,
+  "version": "0.1.0",
+  "description": "RequiMeet - videollamadas grupales para levantamiento de requerimientos",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "dev:server": "npm run dev -w apps/server",
+    "dev:web": "npm run dev -w apps/web",
+    "dev:processor": "npm run dev -w apps/processor"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

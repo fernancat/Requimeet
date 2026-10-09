@@ -1,0 +1,29 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: requimeet
+      POSTGRES_PASSWORD: requimeet
+      POSTGRES_DB: requimeet
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U requimeet"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # LiveKit server en modo dev (clave devkey/secret, ver .env.example).
+  # Para produccion se usaria un livekit.yaml con TLS y claves reales.
+  livekit:
+    image: livekit/livekit-server:v1.8
+    command: --dev --bind 0.0.0.0
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "50000-50100:50000-50100/udp"
+
+volumes:
+  pgdata:
