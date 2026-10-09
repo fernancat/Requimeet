@@ -8,7 +8,7 @@
  * Env: LIVEKIT_URL (default ws://localhost:7880), LIVEKIT_API_KEY,
  *      LIVEKIT_API_SECRET (devkey/secret en dev).
  */
-import { AudioFrame, AudioSource, LocalAudioTrack, Room } from '@livekit/rtc-node';
+import { AudioFrame, AudioSource, LocalAudioTrack, Room, TrackPublishOptions } from '@livekit/rtc-node';
 import { AccessToken } from 'livekit-server-sdk';
 
 const SAMPLE_RATE = 48000;
@@ -41,7 +41,7 @@ async function main(): Promise<void> {
 
   const source = new AudioSource(SAMPLE_RATE, CHANNELS);
   const track = LocalAudioTrack.createAudioTrack('test-tone', source);
-  await room.localParticipant?.publishTrack(track);
+  await room.localParticipant?.publishTrack(track, new TrackPublishOptions());
   console.log('[test-publisher] publicando tono 440Hz...');
 
   const frames = Math.floor((durationSec * 1000) / FRAME_MS);
