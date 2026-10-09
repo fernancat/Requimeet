@@ -5,6 +5,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { IdentityModule } from './modules/identity/identity.module';
 import { MeetingsModule } from './modules/meetings/meetings.module';
+import { ProcessingModule } from './modules/processing/processing.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
 
 @Module({
@@ -16,6 +17,7 @@ import { RealtimeModule } from './modules/realtime/realtime.module';
     MeetingsModule,
     ChatModule,
     RealtimeModule,
+    ProcessingModule,
   ],
 })
 export class AppModule {}
