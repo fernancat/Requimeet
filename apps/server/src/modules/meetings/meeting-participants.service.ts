@@ -2,6 +2,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -17,6 +18,8 @@ export type { Caller } from './caller-resolver';
 
 @Injectable()
 export class MeetingParticipantsService {
+  private readonly logger = new Logger(MeetingParticipantsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly tokens: LivekitTokenService,
@@ -69,6 +72,7 @@ export class MeetingParticipantsService {
             data: { state: 'kicked', leftAt: new Date() },
           });
     await this.rooms.removeParticipant(meeting.code, participant.id);
+    this.logger.log(`reunion ${meeting.code}: participante ${participant.id} expulsado`);
     this.events.emit(DOMAIN_EVENTS.participantKicked, {
       meetingId: meeting.id,
       meetingCode: meeting.code,
