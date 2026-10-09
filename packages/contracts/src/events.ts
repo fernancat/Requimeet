@@ -7,6 +7,7 @@ export const RT_EVENTS = {
   clientJoinMeetingChannel: 'meeting:subscribe',
   clientCancelJoinRequest: 'join-request:cancel',
   clientChatSend: 'chat:send',
+  /** Reservado: el contador de no leidos es del cliente (feat/08); el servidor no lo procesa. */
   clientChatMarkRead: 'chat:mark-read',
   // Servidor -> cliente
   serverMeetingStatus: 'meeting:status',

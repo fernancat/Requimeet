@@ -10,11 +10,10 @@ import type { MediaTokenResponse, ParticipantDto, ParticipantRole, ParticipantSt
 import { PrismaService } from '../../prisma/prisma.service';
 import { LivekitRoomService, MuteResult } from '../livekit/livekit-room.service';
 import { LivekitTokenService } from '../livekit/livekit-token.service';
+import { Caller } from './caller-resolver';
 import { DOMAIN_EVENTS } from './meetings.events';
 
-export type Caller =
-  | { kind: 'host'; hostUserId: string }
-  | { kind: 'guest'; guestSessionId: string };
+export type { Caller } from './caller-resolver';
 
 @Injectable()
 export class MeetingParticipantsService {
