@@ -1,11 +1,311 @@
-/** Placeholder de la sala de videollamada: se implementa en feat/08. */
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Track } from 'livekit-client';
+import { Socket } from 'socket.io-client';
+import type {
+  ParticipantDto,
+  ParticipantsPayload,
+  ProcessingResult,
+} from '@requimeet/contracts';
+import { RT_EVENTS } from '@requimeet/contracts';
+import { getGuestSession, getHostToken, getMediaPrefs } from '../lib/auth';
+import { createSocket } from '../lib/socket';
+import ChatPanel from '../features/chat/ChatPanel';
+import { useChat } from '../features/chat/useChat';
+import { screenShareBlockReason } from '../features/meeting/media-controls';
+import ParticipantsPanel from '../features/meeting/ParticipantsPanel';
+import ParticipantTile from '../features/meeting/ParticipantTile';
+import { ExitReason, useMeetingRoom } from '../features/meeting/useMeetingRoom';
+
+type Panel = 'none' | 'participants' | 'chat';
+
+const EXIT_TEXT: Record<ExitReason, string> = {
+  left: 'Saliste de la reunión',
+  kicked: 'Fuiste expulsado de la reunión',
+  ended: 'El anfitrión finalizó la reunión',
+  'media-revoked': 'Perdiste acceso a la reunión',
+  error: 'La conexión se perdió',
+};
+
 export default function MeetingRoomPage({ code }: { code: string }) {
-  return (
-    <div className="page">
-      <div className="card">
-        <h2>Sala {code}</h2>
-        <p className="status-banner">sala (feat/08)</p>
+  const navigate = useNavigate();
+  const hostToken = getHostToken();
+  const guest = getGuestSession(code);
+  const token = hostToken ?? guest?.token ?? null;
+  const selfName = hostToken ? '' : (guest?.displayName ?? 'Invitado');
+
+  const [exitReason, setExitReason] = useState<ExitReason | null>(null);
+  const [socket, setSocket] = useState<Socket | null>(null);
+  const [participants, setParticipants] = useState<ParticipantDto[]>([]);
+  const [panel, setPanel] = useState<Panel>('none');
+  const [chatInput, setChatInput] = useState('');
+  const [shareNotice, setShareNotice] = useState<string | null>(null);
+  const [lastResult, setLastResult] = useState<ProcessingResult | null>(null);
+  const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
+  const [copied, setCopied] = useState(false);
+
+  const onLeave = useCallback(
+    (reason: ExitReason) => setExitReason(reason),
+    [],
+  );
+  const room = useMeetingRoom(code, token, onLeave);
+  const selfParticipantId = room.room?.localParticipant.identity ?? null;
+
+  const chat = useChat(code, token, socket, selfParticipantId, selfName, panel === 'chat');
+
+  // Socket del canal de tiempo real (participantes, cierres, resultados)
+  useEffect(() => {
+    if (!token) return;
+    const s = createSocket(token);
+    setSocket(s);
+    s.on('connect', () => {
+      s.emit(RT_EVENTS.clientJoinMeetingChannel, { code }, () => {});
+    });
+    s.on(RT_EVENTS.serverParticipants, (payload: ParticipantsPayload) => {
+      setParticipants(payload.participants);
+    });
+    s.on(RT_EVENTS.serverMeetingEnded, () => {
+      setExitReason('ended');
+    });
+    s.on(RT_EVENTS.serverKicked, (payload: { participantId: string }) => {
+      if (payload.participantId === selfParticipantId) {
+        setExitReason('kicked');
+      }
+    });
+    s.on(RT_EVENTS.serverProcessingResult, (result: ProcessingResult) => {
+      setLastResult(result);
+    });
+    return () => {
+      s.disconnect();
+      setSocket(null);
+    };
+  }, [code, token, selfParticipantId]);
+
+  // Cierre total al salir/expulsar/finalizar
+  useEffect(() => {
+    if (!exitReason) return;
+    void room.room?.disconnect();
+    socket?.disconnect();
+    if (exitReason === 'left') {
+      navigate(hostToken ? '/dashboard' : '/');
+    }
+  }, [exitReason, room.room, socket, navigate, hostToken]);
+
+  useEffect(() => {
+    void navigator.mediaDevices?.enumerateDevices?.().then((all) => {
+      setDevices(all.filter((d) => d.deviceId));
+    });
+  }, [room.tick]);
+
+  const micState = useMemo(() => {
+    const state: Record<string, boolean> = {};
+    if (!room.room) return state;
+    const collect = (p: { identity: string; getTrackPublication: (s: Track.Source) => { isMuted: boolean; track?: unknown } | undefined }) => {
+      const pub = p.getTrackPublication(Track.Source.Microphone);
+      state[p.identity] = Boolean(pub?.track) && !(pub?.isMuted ?? true);
+    };
+    collect(room.room.localParticipant);
+    room.room.remoteParticipants.forEach(collect);
+    return state;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room.room, room.tick]);
+
+  const sharingIdentities = useMemo(
+    () => new Set(room.screenSharers.map((s) => s.identity)),
+    [room.screenSharers],
+  );
+
+  async function onShareScreen() {
+    setShareNotice(null);
+    if (room.localSharing) {
+      await room.setScreenShare(false).catch(() => setShareNotice('No se pudo detener la presentación'));
+      return;
+    }
+    const reason = screenShareBlockReason(room.screenSharers);
+    if (reason) {
+      setShareNotice(reason);
+      return;
+    }
+    try {
+      await room.setScreenShare(true);
+    } catch {
+      setShareNotice('No se pudo iniciar la presentación');
+    }
+  }
+
+  async function onCopyLink() {
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}/m/${code}`);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      window.prompt('Copia el enlace:', `${window.location.origin}/m/${code}`);
+    }
+  }
+
+  function togglePanel(next: Panel) {
+    setPanel((current) => {
+      const value = current === next ? 'none' : next;
+      if (value === 'chat') chat.markRead();
+      return value;
+    });
+  }
+
+  if (exitReason) {
+    return (
+      <div className="page">
+        <div className="card">
+          <p className="status-banner warn">{EXIT_TEXT[exitReason]}</p>
+          <div className="actions">
+            <button onClick={() => navigate(hostToken ? '/dashboard' : '/')}>Volver</button>
+          </div>
+        </div>
       </div>
+    );
+  }
+
+  if (room.error && !room.room) {
+    return (
+      <div className="page">
+        <div className="card">
+          <p className="status-banner warn">{room.error}</p>
+          <div className="actions">
+            <button onClick={room.retry}>Reintentar</button>
+            <button className="secondary" onClick={() => void room.leave()}>
+              Salir
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const connectionLabel =
+    room.connectionState === 'connected'
+      ? 'Conectado'
+      : room.connectionState === 'reconnecting'
+        ? 'Reconectando…'
+        : room.connectionState === 'disconnected'
+          ? 'Error de conexión'
+          : 'Conectando…';
+
+  const screenShareTiles = room.screenSharers;
+  const hasScreenShare = screenShareTiles.length > 0;
+  const prefs = getMediaPrefs(code);
+  void prefs;
+
+  return (
+    <div className="room">
+      <header className="room-topbar">
+        <span className="brand">RequiMeet · {code}</span>
+        <div className="topbar-actions">
+          <span className={`conn-state ${room.connectionState}`}>{connectionLabel}</span>
+          <button className="secondary" onClick={() => void onCopyLink()}>
+            {copied ? 'Copiado' : 'Copiar enlace'}
+          </button>
+        </div>
+      </header>
+
+      {lastResult && (
+        <div className="processing-indicator">
+          Análisis de demostración activo (no es transcripción) · audioFrames:{' '}
+          {String(lastResult.payload.audioFrames ?? 0)}
+        </div>
+      )}
+
+      <main className={`room-main ${hasScreenShare ? 'with-share' : ''}`}>
+        {hasScreenShare && room.room && (
+          <div className="share-area">
+            {screenShareTiles.map((sharer) => {
+              const participant =
+                sharer.identity === room.room!.localParticipant.identity
+                  ? room.room!.localParticipant
+                  : room.room!.remoteParticipants.get(sharer.identity);
+              if (!participant) return null;
+              return (
+                <ParticipantTile
+                  key={`share-${sharer.identity}`}
+                  participant={participant}
+                  isLocal={sharer.isLocal}
+                  speaking={false}
+                  source={Track.Source.ScreenShare}
+                  label={`Pantalla de ${sharer.name}`}
+                />
+              );
+            })}
+          </div>
+        )}
+        <div className="tile-grid">
+          {room.room && (
+            <>
+              <ParticipantTile
+                participant={room.room.localParticipant}
+                isLocal
+                speaking={room.speakers.has(room.room.localParticipant.identity)}
+              />
+              {[...room.room.remoteParticipants.values()].map((p) => (
+                <ParticipantTile
+                  key={p.identity}
+                  participant={p}
+                  isLocal={false}
+                  speaking={room.speakers.has(p.identity)}
+                />
+              ))}
+            </>
+          )}
+        </div>
+        {panel === 'participants' && (
+          <ParticipantsPanel
+            participants={participants}
+            selfParticipantId={selfParticipantId}
+            micState={micState}
+            sharingIdentities={sharingIdentities}
+            onSwitchDevice={room.switchDevice}
+            devices={devices}
+          />
+        )}
+        {panel === 'chat' && (
+          <ChatPanel
+            messages={chat.messages}
+            pending={chat.pending}
+            selfParticipantId={selfParticipantId}
+            input={chatInput}
+            setInput={setChatInput}
+            onSend={chat.send}
+            onRetry={chat.retry}
+          />
+        )}
+      </main>
+
+      {shareNotice && <div className="share-notice">{shareNotice}</div>}
+
+      <footer className="room-controls">
+        <button className={room.localMicOn ? 'secondary' : 'danger'} onClick={() => void room.toggleMic(!room.localMicOn)}>
+          {room.localMicOn ? 'Micrófono' : 'Micrófono apagado'}
+        </button>
+        <button
+          className={room.localCameraOn ? 'secondary' : 'danger'}
+          onClick={() => void room.toggleCamera(!room.localCameraOn)}
+        >
+          {room.localCameraOn ? 'Cámara' : 'Cámara apagada'}
+        </button>
+        <button className="secondary" onClick={() => void onShareScreen()}>
+          {room.localSharing ? 'Detener presentación' : 'Compartir pantalla'}
+        </button>
+        <button className={panel === 'participants' ? '' : 'secondary'} onClick={() => togglePanel('participants')}>
+          Participantes
+        </button>
+        <button className={panel === 'chat' ? '' : 'secondary'} onClick={() => togglePanel('chat')}>
+          Chat
+          {chat.unread > 0 && <span className="unread-badge">{chat.unread}</span>}
+        </button>
+        <button className="danger" onClick={() => void room.leave()}>
+          Salir
+        </button>
+      </footer>
+      <p className="share-audio-note">
+        El audio del sistema al compartir pantalla depende del navegador.
+      </p>
     </div>
   );
 }
