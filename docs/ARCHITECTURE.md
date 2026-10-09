@@ -100,7 +100,8 @@ REST (`/api`, salvo webhook):
 - `POST /meetings/:code/participants/:id/kick` (host)
 - `POST /meetings/:code/leave`
 - `GET /meetings/:code/messages` (participante admitido)
-- `POST /webhooks/livekit` (firma verificada, idempotente por `event.id`)
+- `POST /webhooks/livekit` (firma verificada, idempotente por `event.id`; se sirve
+  bajo el prefijo global, ruta real `/api/webhooks/livekit`)
 - Internos: `POST /internal/processing/results` (processor → backend)
 
 Socket.IO (auth por JWT en handshake; room `meeting:<code>` solo tras admisión):
