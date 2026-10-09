@@ -110,7 +110,7 @@ export default function MeetingEntryPage() {
     case 'lobby':
       return <LobbyPage code={code} onBackToPreJoin={() => setState({ phase: 'prejoin' })} />;
     case 'room':
-      return <MeetingRoomPage code={code} />;
+      return <MeetingRoomPage code={code} role={state.via === 'host' ? 'host' : 'participant'} />;
   }
 }
 

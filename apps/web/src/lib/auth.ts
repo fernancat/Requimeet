@@ -64,6 +64,17 @@ export function getMediaPrefs(code: string): MediaPrefs {
   return { audioEnabled: true, videoEnabled: true };
 }
 
+const roleKey = (code: string) => `requimeet.role.${code}`;
+
+export function saveMeetingRole(code: string, role: 'host' | 'participant'): void {
+  sessionStorage.setItem(roleKey(code), role);
+}
+
+export function getMeetingRole(code: string): 'host' | 'participant' | null {
+  const role = sessionStorage.getItem(roleKey(code));
+  return role === 'host' || role === 'participant' ? role : null;
+}
+
 /** Reuniones creadas desde este navegador (no hay endpoint de lista). */
 export function rememberMeeting(meeting: MeetingSummary): void {
   const all = getRememberedMeetings().filter((m) => m.code !== meeting.code);
