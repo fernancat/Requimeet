@@ -12,6 +12,7 @@ type FlowState =
   | { phase: 'created'; info: MeetingPublicInfo }
   | { phase: 'ended' }
   | { phase: 'not-found' }
+  | { phase: 'error' }
   | { phase: 'room'; via: 'host' | 'guest' }
   | { phase: 'prejoin' }
   | { phase: 'lobby' };
@@ -23,6 +24,7 @@ type FlowState =
 export default function MeetingEntryPage() {
   const { code = '' } = useParams();
   const [state, setState] = useState<FlowState>({ phase: 'loading' });
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -35,7 +37,7 @@ export default function MeetingEntryPage() {
           setState(
             err instanceof ApiError && err.status === 404
               ? { phase: 'not-found' }
-              : { phase: 'ended' },
+              : { phase: 'error' },
           );
         }
         return;
@@ -82,7 +84,7 @@ export default function MeetingEntryPage() {
     return () => {
       cancelled = true;
     };
-  }, [code]);
+  }, [code, attempt]);
 
   switch (state.phase) {
     case 'loading':
@@ -101,6 +103,26 @@ export default function MeetingEntryPage() {
       return (
         <div className="page">
           <p className="status-banner warn">La reunión finalizó.</p>
+        </div>
+      );
+    case 'error':
+      return (
+        <div className="page">
+          <div className="card">
+            <p className="status-banner warn">
+              No se pudo contactar al servidor. Revisa tu conexión.
+            </p>
+            <div className="actions">
+              <button
+                onClick={() => {
+                  setState({ phase: 'loading' });
+                  setAttempt((a) => a + 1);
+                }}
+              >
+                Reintentar
+              </button>
+            </div>
+          </div>
         </div>
       );
     case 'created':
