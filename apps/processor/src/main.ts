@@ -1,8 +1,14 @@
+import { config as loadEnv } from 'dotenv';
+import { resolve } from 'node:path';
 import type { ProcessingResult, StartProcessingRequest } from '@requimeet/contracts';
 import { createApp, SessionHandle } from './app';
 import { DemoConsumer } from './consumers/demo-consumer';
 import { ResultsClient } from './results-client';
 import { MediaSession } from './session';
+
+// Carga .env del repo (raiz) y luego el local del paquete si existe (este gana).
+loadEnv({ path: resolve(__dirname, '../../../.env') });
+loadEnv({ path: resolve(__dirname, '../.env'), override: true });
 
 const PORT = Number(process.env.PROCESSOR_PORT) || 4100;
 const SECRET = process.env.INTERNAL_SHARED_SECRET;
