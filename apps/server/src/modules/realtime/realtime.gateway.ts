@@ -39,7 +39,10 @@ const hostRoom = (code: string) => `meeting:${code}:host`;
 const waitRoom = (code: string) => `wait:${code}`;
 
 @WebSocketGateway({
-  cors: { origin: process.env.WEB_ORIGIN ?? 'http://localhost:5173' },
+  cors: {
+    // WEB_ORIGIN admite varios origenes separados por coma
+    origin: (process.env.WEB_ORIGIN ?? 'http://localhost:5173').split(','),
+  },
 })
 export class RealtimeGateway implements OnGatewayConnection {
   private readonly logger = new Logger(RealtimeGateway.name);

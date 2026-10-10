@@ -16,14 +16,13 @@ services:
       retries: 10
 
   # LiveKit server en modo dev (clave devkey/secret, ver .env.example).
-  # --node-ip 127.0.0.1: la IP que el SFU anuncia en sus candidatos ICE.
-  # Sin ella (y sin el puerto UDP 7882 mapeado) el navegador no alcanza los
-  # candidatos y cae al relay TCP: video que parpadea y audio con delay.
-  # Para probar desde OTRO dispositivo en tu red, cambia 127.0.0.1 por la IP
-  # LAN de esta maquina (p.ej. 192.168.1.50).
+  # --node-ip: la IP que el SFU anuncia en sus candidatos ICE.
+  # Para uso solo en esta maquina: 127.0.0.1. Para probar desde OTROS
+  # dispositivos en tu red, pon la IP LAN de esta maquina (p.ej. en
+  # LIVEKIT_NODE_IP del .env: 192.168.40.123) y ajusta VITE_* en apps/web.
   livekit:
     image: livekit/livekit-server:v1.13.9
-    command: --dev --bind 0.0.0.0 --node-ip 127.0.0.1
+    command: --dev --bind 0.0.0.0 --node-ip ${LIVEKIT_NODE_IP:-127.0.0.1}
     ports:
       - "7880:7880"
       - "7881:7881"
