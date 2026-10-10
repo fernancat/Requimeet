@@ -12,7 +12,11 @@ import { api, ApiError } from '../../lib/api';
 import { getMediaPrefs } from '../../lib/auth';
 import { ScreenSharerInfo } from './media-controls';
 
-const LIVEKIT_URL = import.meta.env.VITE_LIVEKIT_URL ?? 'ws://localhost:7880';
+// Sin VITE_LIVEKIT_URL se usa el mismo origen (el dev server proxea /rtc);
+// asi la misma build sirve para localhost, LAN y el tunel ngrok (wss).
+const LIVEKIT_URL =
+  import.meta.env.VITE_LIVEKIT_URL ??
+  `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`;
 
 export type ExitReason = 'left' | 'kicked' | 'ended' | 'media-revoked' | 'error';
 

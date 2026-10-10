@@ -1,4 +1,6 @@
-const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3000';
+// VITE_SERVER_URL vacio (o ausente) = mismo origen; el dev server de vite
+// proxea /api, /socket.io y /rtc (ver vite.config.ts), util para LAN y ngrok.
+const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? '';
 const BASE = `${SERVER_URL}/api`;
 
 export class ApiError extends Error {
