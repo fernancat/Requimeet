@@ -40,8 +40,12 @@ const waitRoom = (code: string) => `wait:${code}`;
 
 @WebSocketGateway({
   cors: {
-    // WEB_ORIGIN admite varios origenes separados por coma
-    origin: (process.env.WEB_ORIGIN ?? 'http://localhost:5173').split(','),
+    // El decorador se evalua al cargar el modulo, ANTES de que ConfigModule
+    // lea el .env; el origen debe resolverse perezoso, por peticion.
+    origin: (origin, cb) => {
+      const allowed = (process.env.WEB_ORIGIN ?? 'http://localhost:5173').split(',');
+      cb(null, !origin || allowed.includes(origin));
+    },
   },
 })
 export class RealtimeGateway implements OnGatewayConnection {

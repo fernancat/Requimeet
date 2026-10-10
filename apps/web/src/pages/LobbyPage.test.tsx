@@ -38,7 +38,7 @@ vi.mock('../lib/socket', () => ({
 function renderLobby() {
   return render(
     <MemoryRouter>
-      <LobbyPage code="ABC123" onBackToPreJoin={() => {}} />
+      <LobbyPage code="ABC123" onBackToPreJoin={() => {}} onAdmitted={() => {}} />
     </MemoryRouter>,
   );
 }

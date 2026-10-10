@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
 import type { JoinRequestUpdatedPayload } from '@requimeet/contracts';
 import { RT_EVENTS } from '@requimeet/contracts';
 import { api } from '../lib/api';
@@ -11,12 +10,15 @@ type LobbyStatus = 'connecting' | 'waiting' | 'reconnecting' | 'rejected' | 'end
 export default function LobbyPage({
   code,
   onBackToPreJoin,
+  onAdmitted,
 }: {
   code: string;
   onBackToPreJoin: () => void;
+  onAdmitted: () => void;
 }) {
-  const navigate = useNavigate();
-  const guest = getGuestSession(code);
+  // getGuestSession devuelve un objeto NUEVO en cada render; sin memoizar,
+  // el efecto del socket se reinicia en cada setStatus y nunca conecta.
+  const guest = useMemo(() => getGuestSession(code), [code]);
   const [status, setStatus] = useState<LobbyStatus>('connecting');
 
   useEffect(() => {
@@ -26,14 +28,26 @@ export default function LobbyPage({
     }
     const socket = createSocket(guest.token);
     socket.on('connect', () => {
-      socket.emit(RT_EVENTS.clientJoinMeetingChannel, { code }, (ack: { ok: boolean }) => {
-        setStatus(ack?.ok ? 'waiting' : 'error');
-      });
+      socket.emit(
+        RT_EVENTS.clientJoinMeetingChannel,
+        { code },
+        (ack: { ok: boolean; role?: 'host' | 'participant' | 'waiting' }) => {
+          // Si ya fuimos admitidos mientras el socket estaba caido, el evento
+          // meeting:admitted se perdio: el ack nos dice el rol actual.
+          if (ack?.ok && ack.role === 'participant') {
+            onAdmitted();
+            return;
+          }
+          setStatus(ack?.ok ? 'waiting' : 'error');
+        },
+      );
     });
     socket.on('disconnect', () => setStatus('reconnecting'));
     socket.io.on('reconnect', () => setStatus('waiting'));
     socket.on(RT_EVENTS.serverAdmitted, () => {
-      navigate(`/m/${code}`, { replace: true });
+      // Estamos en /m/<code> ya; navigate a la misma ruta es no-op, por eso
+      // el padre re-evalua el flujo (sonda media-token -> sala).
+      onAdmitted();
     });
     socket.on(RT_EVENTS.serverRejected, () => setStatus('rejected'));
     socket.on(RT_EVENTS.serverJoinRequestUpdated, (payload: JoinRequestUpdatedPayload) => {
@@ -45,7 +59,7 @@ export default function LobbyPage({
     return () => {
       socket.disconnect();
     };
-  }, [code, guest, navigate]);
+  }, [code, guest, onAdmitted]);
 
   async function onCancel() {
     if (guest) {
