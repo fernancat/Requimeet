@@ -5,7 +5,8 @@ import { SERVER_URL } from './api';
 export function createSocket(token: string): Socket {
   return io(SERVER_URL, {
     auth: { token },
-    transports: ['websocket'],
+    // polling primero (default): el upgrade a websocket es opcional; con
+    // websocket-only una negociacion fallida dejaba al cliente en loop
     reconnection: true,
   });
 }
