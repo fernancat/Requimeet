@@ -179,6 +179,7 @@ async function main() {
   const hostToken = reg.json.accessToken;
   const meet = await api('POST', '/meetings', { token: hostToken, body: { title: 'E2E' } });
   const code = meet.json.code;
+  const meetingId = meet.json.id;
   const started = await api('POST', `/meetings/${code}/start`, { token: hostToken });
   step('a. host register/create/start', reg.status === 201 && started.status === 201, `code=${code}`);
 
@@ -288,9 +289,13 @@ async function main() {
     headers: { 'x-internal-secret': INTERNAL_SECRET },
   });
   const sessionsJson = await sessions.json();
+  // La sesion de ESTA reunion debe haberse cerrado (puede haber otras vivas
+  // si el entorno comparte el processor con reuniones de desarrollo)
   step(
     'i. end: meeting:ended, media-token 409, sesiones del processor vacias',
-    ended.status === 201 && mtAfterEnd.status === 409 && sessionsJson.length === 0,
+    ended.status === 201 &&
+      mtAfterEnd.status === 409 &&
+      !sessionsJson.some((s) => s.meetingId === meetingId),
   );
 }
 

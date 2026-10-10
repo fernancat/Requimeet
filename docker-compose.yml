@@ -22,7 +22,7 @@ services:
   # Para probar desde OTRO dispositivo en tu red, cambia 127.0.0.1 por la IP
   # LAN de esta maquina (p.ej. 192.168.1.50).
   livekit:
-    image: livekit/livekit-server:v1.8
+    image: livekit/livekit-server:v1.13.9
     command: --dev --bind 0.0.0.0 --node-ip 127.0.0.1
     ports:
       - "7880:7880"
