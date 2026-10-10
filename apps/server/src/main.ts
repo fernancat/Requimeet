@@ -11,7 +11,8 @@ async function bootstrap(): Promise<void> {
     new ValidationPipe({ whitelist: true, transform: true }),
   );
   app.enableCors({
-    origin: process.env.WEB_ORIGIN ?? 'http://localhost:5173',
+    // WEB_ORIGIN admite varios origenes separados por coma (p.ej. localhost y la IP LAN)
+    origin: (process.env.WEB_ORIGIN ?? 'http://localhost:5173').split(','),
   });
   await app.listen(Number(process.env.PORT) || 3000);
 }
