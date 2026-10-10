@@ -40,6 +40,8 @@ export type RoomFactory = () => Room;
  */
 export class MediaSession {
   readonly meetingId: string;
+  /** Se invoca tras una desconexion final de LiveKit (no una reconexion). */
+  onFinalDisconnect: (() => void) | null = null;
   private state: SessionConnectionState = 'connecting';
   private readonly startedAtMs = Date.now();
   private readonly pipelines: ConsumerPipeline[];
@@ -176,6 +178,8 @@ export class MediaSession {
     room.on(RoomEvent.Disconnected, () => {
       this.state = 'disconnected';
       this.logger(`sesion ${this.meetingId}: desconectada de LiveKit`);
+      // Libera recursos y avisa al registro para no dejar sesiones zombie
+      void this.stop('disconnected').finally(() => this.onFinalDisconnect?.());
     });
   }
 

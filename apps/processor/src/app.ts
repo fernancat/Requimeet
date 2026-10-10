@@ -10,6 +10,8 @@ export interface SessionHandle {
   info(): ProcessingSessionInfo;
   start(): Promise<void>;
   stop(reason: string): Promise<void>;
+  /** Opcional: aviso de desconexion final para limpieza del registro. */
+  onFinalDisconnect?: (() => void) | null;
 }
 
 export type SessionFactory = (request: StartProcessingRequest) => SessionHandle;
@@ -61,6 +63,12 @@ export function createApp(deps: AppDeps): Express {
 
     const session = deps.sessionFactory(body);
     sessions.set(body.meetingId, session);
+    session.onFinalDisconnect = () => {
+      if (sessions.get(body.meetingId) === session) {
+        sessions.delete(body.meetingId);
+        logger(`sesion ${body.meetingId}: descartada tras desconexion final`);
+      }
+    };
     try {
       await session.start();
     } catch (error) {
