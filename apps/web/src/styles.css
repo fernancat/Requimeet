@@ -491,6 +491,45 @@ button.danger {
   flex: 1;
 }
 
+.transcript-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.transcript-empty {
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+.transcript-line {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border-left: 2px solid var(--accent);
+  background: var(--bg-input);
+  border-radius: 6px;
+}
+
+.transcript-line.partial {
+  border-left-color: var(--text-dim);
+  opacity: 0.7;
+}
+
+.transcript-meta {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.transcript-text {
+  font-size: 14px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .room-controls {
   display: flex;
   justify-content: center;

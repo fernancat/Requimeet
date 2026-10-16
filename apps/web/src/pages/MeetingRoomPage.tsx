@@ -25,8 +25,13 @@ import ParticipantsPanel from '../features/meeting/ParticipantsPanel';
 import ParticipantTile from '../features/meeting/ParticipantTile';
 import { useJoinRequests } from '../features/meeting/useJoinRequests';
 import { ExitReason, useMeetingRoom } from '../features/meeting/useMeetingRoom';
+import TranscriptPanel from '../features/transcript/TranscriptPanel';
+import {
+  applyTranscriptResult,
+  TranscriptSegment,
+} from '../features/transcript/transcript-store';
 
-type Panel = 'none' | 'participants' | 'chat';
+type Panel = 'none' | 'participants' | 'chat' | 'transcript';
 
 interface SubscribeAck {
   ok: boolean;
@@ -62,6 +67,7 @@ export default function MeetingRoomPage({
   const [chatInput, setChatInput] = useState('');
   const [shareNotice, setShareNotice] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<ProcessingResult | null>(null);
+  const [transcript, setTranscript] = useState<TranscriptSegment[]>([]);
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [copied, setCopied] = useState(false);
   const [isHost, setIsHost] = useState(
@@ -119,7 +125,14 @@ export default function MeetingRoomPage({
       }
     });
     s.on(RT_EVENTS.serverProcessingResult, (result: ProcessingResult) => {
-      setLastResult(result);
+      if (
+        result.kind === 'transcript-partial' ||
+        result.kind === 'transcript-final'
+      ) {
+        setTranscript((current) => applyTranscriptResult(current, result));
+      } else {
+        setLastResult(result);
+      }
     });
     return () => {
       s.disconnect();
@@ -376,6 +389,9 @@ export default function MeetingRoomPage({
             onRetry={chat.retry}
           />
         )}
+        {panel === 'transcript' && (
+          <TranscriptPanel segments={transcript} participants={participants} />
+        )}
       </main>
 
       {shareNotice && <div className="share-notice">{shareNotice}</div>}
@@ -403,6 +419,12 @@ export default function MeetingRoomPage({
         <button className={panel === 'chat' ? '' : 'secondary'} onClick={() => togglePanel('chat')}>
           Chat
           {chat.unread > 0 && <span className="unread-badge">{chat.unread}</span>}
+        </button>
+        <button
+          className={panel === 'transcript' ? '' : 'secondary'}
+          onClick={() => togglePanel('transcript')}
+        >
+          Transcripción
         </button>
         {isHost &&
           (confirmEnd ? (

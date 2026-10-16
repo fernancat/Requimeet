@@ -12,12 +12,14 @@
     "@livekit/rtc-node": "^0.13.0",
     "@requimeet/contracts": "*",
     "express": "^5.0.0",
-    "livekit-server-sdk": "^2.19.0"
+    "livekit-server-sdk": "^2.19.0",
+    "ws": "^8.21.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^24.0.0",
+    "@types/ws": "^8.18.0",
     "dotenv": "^17.4.1",
     "jest": "^30.0.0",
     "ts-jest": "^29.4.0",
