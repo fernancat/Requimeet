@@ -96,3 +96,18 @@ reales de reuniones. Los scripts reproducibles están documentados en INTEGRACIO
   Chromium verificó que apareciera la siguiente pregunta, que la respuesta inicial
   quedara RESOLVED y que no existiera «Ya la pregunté». No sustituye una prueba de
   reconocimiento con micrófono físico.
+
+## Latencia y reconocimiento de respuestas fragmentadas
+
+- Se inspeccionaron ejecuciones persistidas: hubo lotes de 15–51 segundos y un lote
+  que generó preguntas nuevas pero omitió evaluar una respuesta ASKED presente.
+- Reejecución de ese mismo input sin modificar datos de la reunión: el trabajo
+  anterior registró 25,830 ms totales; la nueva llamada con catálogo/validación tomó
+  11,791 ms, devolvió una respuesta clear, seis fuentes con citas verificadas y una
+  pregunta nueva. No es un benchmark controlado ni garantía de latencia; la segunda
+  medición no incluye espera de la cola ni captura de audio.
+- Pruebas del proveedor verifican modelo exacto, razonamiento desactivado solo en
+  vivo y presupuesto de salida; los perfiles de documentos no cambian.
+- Se añadió cobertura de revisión explícita de preguntas abiertas sobre segmentos
+  ya analizados. El frontend deja de inferir insuficiencia de información solamente
+  porque terminó un lote sin respuesta propuesta.

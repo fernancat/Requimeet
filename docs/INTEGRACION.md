@@ -154,3 +154,10 @@ continúa con la respuesta sin «Ya la pregunté». La siguiente pregunta se ada
 lo conversado. Las reuniones existentes conservan sus preguntas y respuestas.
 No requiere migración adicional. La detección ocurre al confirmar la transcripción
 y completar el lote de IA; no implica reconocimiento instantáneo por palabra.
+
+
+El modo rápido de Brody ya está activo, sin cambio de modelo ni variables nuevas.
+Recargar el frontend. Para una pregunta que quedó sin respuesta antes de este
+ajuste, «Analizar ahora» permite revisitar el texto confirmado; también se sigue
+analizando al hablar. El tiempo total depende de la pausa de voz, cola y proveedor:
+no se garantiza una latencia fija. Los documentos mantienen el perfil anterior.

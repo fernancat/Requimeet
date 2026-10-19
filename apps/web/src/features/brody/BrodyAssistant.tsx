@@ -105,7 +105,7 @@ export default function BrodyAssistant({ code, token, canEdit, refreshVersion, i
       {current && <div className="brody-next">
         {suggestion && <><p>Para la pregunta: {current.text}</p><p role="status">{suggestion.reason || '¿Esto refleja lo acordado? Confírmalo o acláralo hablando.'}</p></>}
         {current.status === 'ASKED' && !suggestion && <div className="brody-listening" role="status">
-          <p>{!micOn ? 'Tu micrófono está apagado. Puedes activarlo y responder tú mismo; no necesitas otro participante.' : working ? 'Estoy analizando la transcripción para identificar la respuesta…' : analyzedSinceAsked ? 'Ya analicé el texto, pero aún no identifiqué una respuesta clara. Puedes aclararla hablando o escribirla abajo.' : 'Responde en voz alta y haz una pausa. Cuando llegue el texto confirmado, buscaré la respuesta y la guardaré si es clara. Si tengo dudas, te pediré aclaración.'}</p>
+          <p>{!micOn ? 'Tu micrófono está apagado. Puedes activarlo y responder tú mismo; no necesitas otro participante.' : working ? 'Estoy analizando la transcripción para identificar la respuesta…' : analyzedSinceAsked ? 'El último lote ya se analizó. Sigo atento a los nuevos fragmentos de la respuesta; puedes continuar hablando.' : 'Responde en voz alta y haz una pausa. Cuando llegue el texto confirmado, buscaré la respuesta y la guardaré si es clara. Si tengo dudas, te pediré aclaración.'}</p>
           <p><strong>Último texto recibido:</strong> {transcriptText || 'Todavía no llega texto del audio. Comprueba el micrófono y sus permisos.'}</p>
           {failed && <p>El análisis falló. Reintenta con «Analizar ahora» o escribe la respuesta.</p>}
         </div>}

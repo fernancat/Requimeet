@@ -66,9 +66,9 @@ escrita o segmentos finales de la misma reunión como evidencia.
    `resultId` estable y revisiones crecientes. Los finales reemplazan parciales.
 4. El backend persiste antes de retransmitir. No degrada finales con eventos
    atrasados. El frontend recupera páginas REST y reconcilia eventos por revisión.
-5. Solo finales disparan `transcript.confirmed`. La IA agrupa 1.5 segundos de
+5. Solo finales disparan `transcript.confirmed`. La IA agrupa 0.8 segundos de
    cambios y procesa bloques de hasta 20 segmentos con contexto acotado.
-6. El worker consulta trabajos cada 2 segundos, con máximo tres intentos y
+6. El worker consulta trabajos cada 0.5 segundos, con máximo tres intentos y
    timeout de 45 segundos por llamada. Actualmente se despliega un solo worker
    dentro del servidor; no requiere Redis. Recupera trabajos tras reinicio.
 7. Las respuestas se validan estructuralmente y se comprueban sus referencias.
@@ -188,3 +188,21 @@ ediciones humanas. No se agregan llamadas al proveedor ni se procesa texto parci
 La clasificación semántica sigue dependiendo del modelo; citar el tema no debería
 interpretarse como formular una pregunta. Las acciones manuales quedan para dudas,
 correcciones o cambios de rumbo, no para el camino habitual de la entrevista.
+
+
+### Análisis breve durante la conversación
+
+El análisis en vivo usa el mismo `deepseek/deepseek-v4-flash` con
+`reasoning.effort=none` y hasta 3000 tokens de salida; las generaciones de documento
+y entidades conservan la configuración anterior. El catálogo consultado admite
+`none` y reporta `high` por defecto. Referencia del parámetro:
+https://openrouter.ai/docs/guides/best-practices/reasoning-tokens.
+
+`live-analysis.prompt.ts` prioriza evaluar preguntas ASKED antes de abrir temas.
+Ordena el contexto cronológicamente y pide interpretar fragmentos consecutivos
+como una respuesta, sin exigir datos no solicitados por la pregunta. Limita nuevas
+preguntas a una por lote y requerimientos a cinco. Se mantienen citas verificadas,
+control de revisión y confirmación para incertidumbre real. El perfil de análisis
+forma parte de la huella del trabajo (`policyVersion`). Un análisis explícito puede
+revisitar finales ya analizados cuando queda una pregunta ASKED sin respuesta;
+la misma huella sigue evitando duplicados.
