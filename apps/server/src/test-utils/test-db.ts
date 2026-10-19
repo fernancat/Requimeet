@@ -10,6 +10,7 @@ export function createTestPrisma(): PrismaClient {
 }
 
 export async function cleanDb(prisma: PrismaClient): Promise<void> {
+  await prisma.artifact.deleteMany();
   await prisma.aiJob.deleteMany();
   await prisma.question.deleteMany();
   await prisma.requirement.deleteMany();

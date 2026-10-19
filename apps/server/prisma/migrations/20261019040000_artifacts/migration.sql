@@ -1,0 +1,3 @@
+ALTER TABLE "Meeting" ADD COLUMN "selectedEntityId" TEXT, ADD COLUMN "selectedDocumentId" TEXT;
+CREATE TABLE "Artifact" ("id" TEXT PRIMARY KEY, "meetingId" TEXT NOT NULL REFERENCES "Meeting"("id") ON DELETE CASCADE, "kind" TEXT NOT NULL, "jobId" TEXT UNIQUE, "content" JSONB NOT NULL, "sourceFingerprint" TEXT NOT NULL, "version" INTEGER NOT NULL DEFAULT 1, "reviewed" BOOLEAN NOT NULL DEFAULT false, "history" JSONB NOT NULL DEFAULT '[]', "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL);
+CREATE INDEX "Artifact_meetingId_kind_idx" ON "Artifact"("meetingId", "kind");

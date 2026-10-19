@@ -32,6 +32,9 @@ model Meeting {
   messages           ChatMessage[]
   transcriptSegments TranscriptSegment[]
   requirements       Requirement[]
+  selectedEntityId   String?
+  selectedDocumentId String?
+  artifacts          Artifact[]
   aiJobs             AiJob[]
   questions          Question[]
 }
@@ -181,4 +184,20 @@ model Question {
   history Json @default("[]")
   createdAt DateTime @default(now())
   @@unique([meetingId, normalizedText])
+}
+
+model Artifact {
+ id String @id @default(uuid())
+ meetingId String
+ meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+ kind String
+ jobId String? @unique
+ content Json
+ sourceFingerprint String
+ version Int @default(1)
+ reviewed Boolean @default(false)
+ history Json @default("[]")
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ @@index([meetingId, kind])
 }

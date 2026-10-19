@@ -1,3 +1,4 @@
+import { ArtifactsModule } from './modules/artifacts/artifacts.module';
 import { QuestionsModule } from './modules/questions/questions.module';
 import { AiModule } from './modules/ai/ai.module';
 import { Module } from '@nestjs/common';
@@ -24,6 +25,7 @@ import { RequirementsModule } from './modules/requirements/requirements.module';
     RequirementsModule,
     AiModule,
     QuestionsModule,
+    ArtifactsModule,
   ],
 })
 export class AppModule {}

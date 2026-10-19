@@ -199,3 +199,6 @@ Ver `packages/contracts/src/media.ts`. Resumen:
 
 ## Revisión del levantamiento
 MeetingAccessService centraliza lectura de admitidos durante una reunión activa y administración exclusiva del propietario, incluso al terminar. Los requerimientos tienen versión optimista, fuentes múltiples, descarte reversible e historial. Aprobar no permite editar: primero se reabre a PENDING. Los cambios persistidos notifican workspace:changed; los clientes consultan el estado autorizado por REST.
+
+## Artefactos del levantamiento
+Artifact almacena propuestas separadas, contenido estructurado, versión optimista e historial. Meeting conserva el modelo seleccionado. La huella de fuentes detecta cambios posteriores; generar nunca reemplaza la selección existente. Entidades y relaciones solo referencian requerimientos aprobados; la UI edita formularios y renderiza el mismo SVG determinista que utilizarán las exportaciones.
