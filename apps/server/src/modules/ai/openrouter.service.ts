@@ -43,7 +43,7 @@ export class OpenRouterService {
         ...(options.onPartial ? { stream: true } : {}),
         temperature: 0.2,
         max_tokens: options.live ? 3000 : 7000,
-        ...(options.live ? { reasoning: { effort: 'none' } } : {}),
+        ...(options.live ? { reasoning: { effort: 'none' }, provider: { sort: 'latency' } } : {}),
         response_format: { type: 'json_object' },
         messages: [
           {

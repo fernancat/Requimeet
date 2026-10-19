@@ -14,8 +14,9 @@ describe('OpenRouter live latency settings', () => {
     expect(live.model).toBe('deepseek/deepseek-v4-flash');
     expect(live.reasoning).toEqual({ effort: 'none' });
     expect(live.max_tokens).toBe(3000);
+    expect(live.provider).toEqual({ sort: 'latency' });
     await service.generate('document', {});
     const document = JSON.parse(fetchMock.mock.calls[2][1].body);
-    expect(document.reasoning).toBeUndefined(); expect(document.max_tokens).toBe(7000);
+    expect(document.provider).toBeUndefined(); expect(document.reasoning).toBeUndefined(); expect(document.max_tokens).toBe(7000);
   });
 });
