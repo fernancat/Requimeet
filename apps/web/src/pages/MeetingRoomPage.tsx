@@ -72,6 +72,7 @@ export default function MeetingRoomPage({
   const [socket, setSocket] = useState<Socket | null>(null);
   const [participants, setParticipants] = useState<ParticipantDto[]>([]);
   const [panel, setPanel] = useState<Panel>('none');
+  const [visited, setVisited] = useState<Set<Panel>>(new Set());
   const [chatInput, setChatInput] = useState('');
   const [shareNotice, setShareNotice] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<ProcessingResult | null>(null);
@@ -226,6 +227,7 @@ export default function MeetingRoomPage({
   }
 
   function togglePanel(next: Panel) {
+    setVisited(current => new Set([...current, next]));
     setPanel((current) => {
       const value = current === next ? 'none' : next;
       if (value === 'chat') chat.markRead();
@@ -276,6 +278,7 @@ export default function MeetingRoomPage({
       <div className="page">
         <div className="card">
           <p className="status-banner warn">{EXIT_TEXT[exitReason]}</p>
+          {isHost && <a href={`/meetings/${code}/review`}>Continuar revisión del levantamiento</a>}
           <div className="actions">
             <button onClick={() => navigate(hostToken ? '/dashboard' : '/')}>Volver</button>
           </div>
@@ -327,12 +330,15 @@ export default function MeetingRoomPage({
 
       {lastResult && (
         <div className="processing-indicator">
-          Análisis de demostración activo (no es transcripción) · audioFrames:{' '}
-          {String(lastResult.payload.audioFrames ?? 0)}
+          {lastResult.payload.processingStatus === 'connected' ? 'Transcripción conectada' : lastResult.payload.processingStatus === 'interrupted' ? 'Transcripción interrumpida; reconectando…' : 'Procesando audio'}
         </div>
       )}
 
-      <main className={`room-main ${hasScreenShare ? 'with-share' : ''}`}>
+      <nav className="room-tools" aria-label="Herramientas de la reunión">
+        {(['participants','chat','transcript','requirements','questions'] as const).map(tool => <button key={tool} className={panel === tool ? '' : 'secondary'} aria-pressed={panel === tool} onClick={() => togglePanel(tool)}>{{ participants: 'Participantes', chat: 'Chat', transcript: 'Transcripción', requirements: 'Requerimientos', questions: 'Preguntas IA' }[tool]}{tool === 'chat' && chat.unread > 0 ? ` (${chat.unread})` : tool === 'participants' && joinRequests.pending.length > 0 ? ` (${joinRequests.pending.length})` : ''}</button>)}
+      </nav>
+      <main className={`room-main ${hasScreenShare ? 'with-share' : ''} ${panel !== 'none' ? 'has-panel' : ''}`}>
+        <div className="media-stage">
         {hasScreenShare && room.room && (
           <div className="share-area">
             {screenShareTiles.map((sharer) => {
@@ -373,6 +379,9 @@ export default function MeetingRoomPage({
             </>
           )}
         </div>
+        </div>
+        <aside className="room-sidebar" hidden={panel === 'none'} aria-label="Panel de trabajo">
+        <button className="secondary panel-close" onClick={() => setPanel('none')}>Cerrar panel</button>
         {panel === 'participants' && (
           <div className="side-panel-stack">
             {isHost && (
@@ -416,8 +425,8 @@ export default function MeetingRoomPage({
           <TranscriptPanel segments={transcript} participants={participants} />
         )}
 
-        {panel === 'questions' && token && <QuestionsPanel code={code} token={token} canEdit={isHost} refreshVersion={requirementsVersion} />}
-        {panel === 'requirements' && token && (
+        <div className="panel-content" hidden={panel !== 'questions'}>{visited.has('questions') && token && <QuestionsPanel code={code} token={token} canEdit={isHost} refreshVersion={requirementsVersion} />}</div>
+        <div className="panel-content" hidden={panel !== 'requirements'}>{visited.has('requirements') && token && (
           <RequirementsPanel
             key={code}
             code={code}
@@ -425,7 +434,8 @@ export default function MeetingRoomPage({
             refreshVersion={requirementsVersion}
             canEdit={isHost}
           />
-        )}
+        )}</div>
+        </aside>
       </main>
 
       {shareNotice && <div className="share-notice">{shareNotice}</div>}
@@ -444,30 +454,6 @@ export default function MeetingRoomPage({
         <button className="secondary" onClick={() => void onShareScreen()}>
           {room.localSharing ? 'Detener presentación' : 'Compartir pantalla'}
         </button>
-        <button className={panel === 'participants' ? '' : 'secondary'} onClick={() => togglePanel('participants')}>
-          Participantes
-          {isHost && joinRequests.pending.length > 0 && (
-            <span className="unread-badge">{joinRequests.pending.length}</span>
-          )}
-        </button>
-        <button className={panel === 'chat' ? '' : 'secondary'} onClick={() => togglePanel('chat')}>
-          Chat
-          {chat.unread > 0 && <span className="unread-badge">{chat.unread}</span>}
-        </button>
-        <button
-          className={panel === 'transcript' ? '' : 'secondary'}
-          onClick={() => togglePanel('transcript')}
-        >
-          Transcripción
-        </button>
-                <button
-          type="button"
-          className={panel === 'requirements' ? '' : 'secondary'}
-          onClick={() => togglePanel('requirements')}
-        >
-          Requerimientos
-        </button>
-        <button className={panel === 'questions' ? '' : 'secondary'} onClick={() => togglePanel('questions')}>Preguntas IA</button>
         {isHost &&
           (confirmEnd ? (
             <button className="danger" onClick={() => void onEndMeeting()}>

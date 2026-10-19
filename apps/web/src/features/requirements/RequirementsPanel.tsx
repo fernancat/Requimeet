@@ -1,3 +1,4 @@
+import { useUnsaved } from '../workspace/useResource';
 import { api } from '../../lib/api';
 import { useEffect, useState } from 'react';
 import {
@@ -63,17 +64,24 @@ function RequirementCard({
 }: RequirementCardProps) {
   const [text, setText] = useState(requirement.text);
   const [status, setStatus] = useState(requirement.status);
+  const [editVersion, setEditVersion] = useState(requirement.version);
+  const dirty = text !== requirement.text || status !== requirement.status;
+  useUnsaved(dirty);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   const isApproved = requirement.status === 'APPROVED';
 
   useEffect(() => {
-    if (requirement.status === 'APPROVED') {
+    if (!dirty) {
+      setEditVersion(requirement.version);
+      setStatus(requirement.status);
+      setText(requirement.text);
+    } else if (requirement.status === 'APPROVED') {
       setText(requirement.text);
       setStatus('APPROVED');
     }
-  }, [requirement.text, requirement.status]);
+  }, [requirement.text, requirement.status, requirement.version]);
 
   async function save() {
     if (saving || isApproved || !canEdit) return;
@@ -103,12 +111,13 @@ function RequirementCard({
         requirement.id,
         token,
         {
-          version: requirement.version,
+          version: editVersion,
           text: trimmed,
           status,
         },
       );
 
+      setEditVersion(updated.version);
       setText(updated.text);
       setStatus(updated.status);
       onUpdated(updated);

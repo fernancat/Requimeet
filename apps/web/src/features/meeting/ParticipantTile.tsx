@@ -26,6 +26,7 @@ export default function ParticipantTile({
   source = Track.Source.Camera,
   label,
 }: TileProps) {
+  const tileRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const publication = participant.getTrackPublication(source);
@@ -56,7 +57,7 @@ export default function ParticipantTile({
   const name = participant.name || participant.identity;
 
   return (
-    <div className={`tile ${speaking ? 'speaking' : ''}`}>
+    <div ref={tileRef} className={`tile ${speaking ? 'speaking' : ''} ${source === Track.Source.ScreenShare ? 'screen-tile' : ''}`}>
       {track ? (
         <video ref={videoRef} autoPlay playsInline muted={isLocal} />
       ) : (
@@ -65,6 +66,7 @@ export default function ParticipantTile({
         </div>
       )}
       {!isLocal && source === Track.Source.Camera && <audio ref={audioRef} autoPlay />}
+      {source === Track.Source.ScreenShare && <button className="fullscreen-button secondary" onClick={() => { if (document.fullscreenElement) void document.exitFullscreen(); else void tileRef.current?.requestFullscreen?.().catch(() => {}); }}>Pantalla completa</button>}
       <div className="tile-label">
         <span>
           {label ?? name}

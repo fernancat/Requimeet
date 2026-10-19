@@ -202,3 +202,6 @@ MeetingAccessService centraliza lectura de admitidos durante una reunión activa
 
 ## Artefactos del levantamiento
 Artifact almacena propuestas separadas, contenido estructurado, versión optimista e historial. Meeting conserva el modelo seleccionado. La huella de fuentes detecta cambios posteriores; generar nunca reemplaza la selección existente. Entidades y relaciones solo referencian requerimientos aprobados; la UI edita formularios y renderiza el mismo SVG determinista que utilizarán las exportaciones.
+
+## Sala y revisión responsive (27)
+El escenario multimedia y el panel de trabajo son regiones independientes. Pantalla compartida usa contain y pantalla completa; la tira de participantes tiene altura acotada. Bajo 900px el panel ocupa el área de trabajo con cierre explícito. La navegación de herramientas se separa de los controles de medios. Los editores visitados permanecen montados al cambiar de panel para conservar borradores. Se verificó con dos clientes LiveKit y una pista de presentación de prueba en 360, 768, 1366 y 1920px.
