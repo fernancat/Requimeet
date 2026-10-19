@@ -126,15 +126,19 @@ model TranscriptSegment {
 model Requirement {
   id                  String            @id @default(uuid())
   meetingId           String
-  transcriptSegmentId String
+  transcriptSegmentId String?
   originalText        String
+  sourceIds           String[]          @default([])
+  version             Int               @default(1)
+  discarded           Boolean           @default(false)
+  history             Json              @default("[]")
   text                String
   status              RequirementStatus @default(PENDING)
   createdAt           DateTime          @default(now())
   updatedAt           DateTime          @updatedAt
 
   meeting           Meeting           @relation(fields: [meetingId], references: [id])
-  transcriptSegment TranscriptSegment @relation(fields: [transcriptSegmentId], references: [id])
+  transcriptSegment TranscriptSegment? @relation(fields: [transcriptSegmentId], references: [id])
 
   @@unique([transcriptSegmentId, originalText])
   @@index([meetingId, status])

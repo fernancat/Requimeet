@@ -23,6 +23,11 @@ export class RealtimeRelay {
     private readonly prisma: PrismaService,
   ) {}
 
+  @OnEvent('workspace.changed')
+  onWorkspaceChanged(payload: { code: string; resource: string }) {
+    this.gateway.server?.to(meetingRoom(payload.code)).emit('workspace:changed', payload);
+  }
+
   @OnEvent(DOMAIN_EVENTS.joinRequestCreated)
   async onJoinRequestCreated(payload: JoinRequestCreatedPayload): Promise<void> {
     const request = await this.prisma.joinRequest.findUnique({

@@ -196,3 +196,6 @@ Ver `packages/contracts/src/media.ts`. Resumen:
   permite y no se ofrece en la API).
 - Rate limiting básico en solicitudes de ingreso y mensajes (en memoria, por
   IP/sesión), documentado como mecanismo de desarrollo, no anti-DDoS.
+
+## Revisión del levantamiento
+MeetingAccessService centraliza lectura de admitidos durante una reunión activa y administración exclusiva del propietario, incluso al terminar. Los requerimientos tienen versión optimista, fuentes múltiples, descarte reversible e historial. Aprobar no permite editar: primero se reabre a PENDING. Los cambios persistidos notifican workspace:changed; los clientes consultan el estado autorizado por REST.

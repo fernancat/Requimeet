@@ -1,6 +1,8 @@
-import { IsIn, IsString, Length, ValidateIf } from 'class-validator';
+import { IsInt, Min, IsOptional, IsIn, IsString, Length, ValidateIf } from 'class-validator';
 
 export class UpdateRequirementDto {
+  @IsInt() @Min(1) version!: number;
+  @IsOptional() @IsIn(['reopen', 'discard', 'restore']) action?: 'reopen' | 'discard' | 'restore';
   @ValidateIf((_object, value) => value !== undefined)
   @IsString()
   @Length(1, 5000)

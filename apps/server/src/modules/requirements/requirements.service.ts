@@ -1,197 +1,45 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
-import type { ProcessingResult } from '@requimeet/contracts';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
+import { MeetingAccessService } from '../meetings/meeting-access.service';
 import type { Caller } from '../meetings/caller-resolver';
-import { extractRequirementCandidates } from './requirement-extractor';
 import type { UpdateRequirementDto } from './update-requirement.dto';
-
+const include = { transcriptSegment: { include: { participant: { select: { id: true, displayName: true } } } } };
 @Injectable()
 export class RequirementsService {
-  constructor(private readonly prisma: PrismaService) {}
-
-  private async requireMeetingAccess(code: string, caller: Caller) {
-    const meeting = await this.prisma.meeting.findUnique({
-      where: { code },
-    });
-
-    if (!meeting) {
-      throw new NotFoundException('Reunión no encontrada');
-    }
-
-    const participant = await this.prisma.participant.findFirst({
-      where: {
-        meetingId: meeting.id,
-        state: 'admitted',
-        ...(caller.kind === 'host'
-          ? { hostUserId: caller.hostUserId }
-          : { guestSessionId: caller.guestSessionId }),
-      },
-      select: { id: true },
-    });
-
-    if (!participant) {
-      throw new ForbiddenException(
-        'Debes ser participante admitido de esta reunión',
-      );
-    }
-
-    return meeting;
-  }
-
+  constructor(private readonly prisma: PrismaService, private readonly access: MeetingAccessService, private readonly events: EventEmitter2) {}
   async list(code: string, caller: Caller) {
-    const meeting = await this.requireMeetingAccess(code, caller);
-
-    return this.prisma.requirement.findMany({
-      where: { meetingId: meeting.id },
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-      include: {
-        transcriptSegment: {
-          include: {
-            participant: {
-              select: {
-                id: true,
-                displayName: true,
-              },
-            },
-          },
-        },
-      },
-    });
+    const meeting = await this.access.require(code, caller);
+    return this.prisma.requirement.findMany({ where: { meetingId: meeting.id }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], include });
   }
-
-    async update(
-    code: string,
-    requirementId: string,
-    caller: Caller,
-    input: UpdateRequirementDto,
-  ) {
-    const meeting = await this.requireMeetingAccess(code, caller);
-
-    const requirement = await this.prisma.requirement.findFirst({
-      where: {
-        id: requirementId,
-        meetingId: meeting.id,
-      },
-    });
-
-    if (!requirement) {
-      throw new NotFoundException('Requerimiento no encontrado');
-    }
-
-    if (input.text === undefined && input.status === undefined) {
-      throw new BadRequestException(
-        'Debes enviar el texto o el estado que deseas cambiar',
-      );
-    }
-
-    const text = input.text?.trim();
-
-    if (text !== undefined && text.length === 0) {
-      throw new BadRequestException('El texto no puede estar vacío');
-    }
-
-    const textChanged =
-      text !== undefined && text !== requirement.text;
-
-    return this.prisma.requirement.update({
-      where: { id: requirement.id },
-      data: {
-        ...(text !== undefined ? { text } : {}),
-        status:
-          input.status ??
-          (textChanged ? 'CORRECTED' : requirement.status),
-      },
-      include: {
-        transcriptSegment: {
-          include: {
-            participant: {
-              select: {
-                id: true,
-                displayName: true,
-              },
-            },
-          },
-        },
-      },
-    });
+  async create(code: string, caller: Caller, body: { text: string; sourceIds?: string[] }) {
+    const meeting = await this.access.require(code, caller, true);
+    if (typeof body.text !== 'string' || !body.text.trim() || body.text.length > 5000) throw new BadRequestException('Texto requerido (máximo 5000 caracteres)');
+    const ids = body.sourceIds ?? [];
+    if (!Array.isArray(ids) || ids.some(id => typeof id !== 'string') || new Set(ids).size !== ids.length || await this.prisma.transcriptSegment.count({ where: { id: { in: ids }, meetingId: meeting.id, isFinal: true } }) !== ids.length) throw new BadRequestException('Fuentes inválidas');
+    const item = await this.prisma.requirement.create({ data: { meetingId: meeting.id, text: body.text.trim(), originalText: body.text.trim(), sourceIds: ids, transcriptSegmentId: ids[0] }, include });
+    this.events.emit('workspace.changed', { code, resource: 'requirements' });
+    return item;
   }
-
-  async saveFinalTranscript(result: ProcessingResult) {
-    if (result.kind !== 'transcript-final' || !result.isFinal) {
-      return null;
-    }
-
-    const { text, startMs, endMs } = result.payload;
-
-    if (typeof text !== 'string' || !text.trim()) {
-      return null;
-    }
-
-    if (result.participantId) {
-      const participant = await this.prisma.participant.findFirst({
-        where: {
-          id: result.participantId,
-          meetingId: result.meetingId,
-        },
-        select: { id: true },
-      });
-
-      if (!participant) {
-        throw new BadRequestException(
-          'El participante no pertenece a la reunión',
-        );
-      }
-    }
-
-    return this.prisma.$transaction(async (tx) => {
-      const segment = await tx.transcriptSegment.upsert({
-        where: { resultId: result.resultId },
-        update: {},
-        create: {
-          resultId: result.resultId,
-          meetingId: result.meetingId,
-          participantId: result.participantId ?? null,
-          trackSid: result.trackSid ?? null,
-          text: text.trim(),
-          startMs:
-            typeof startMs === 'number' && Number.isFinite(startMs)
-              ? startMs
-              : null,
-          endMs:
-            typeof endMs === 'number' && Number.isFinite(endMs)
-              ? endMs
-              : null,
-          createdAtMs: result.createdAtMs,
-        },
-      });
-
-      if (segment.meetingId !== result.meetingId) {
-        throw new BadRequestException(
-          'El resultado ya pertenece a otra reunión',
-        );
-      }
-
-      const candidates = extractRequirementCandidates(segment.text);
-
-      if (candidates.length > 0) {
-        await tx.requirement.createMany({
-          data: candidates.map((candidate) => ({
-            meetingId: segment.meetingId,
-            transcriptSegmentId: segment.id,
-            originalText: candidate,
-            text: candidate,
-            status: 'PENDING' as const,
-          })),
-          skipDuplicates: true,
-        });
-      }
-
-      return segment;
+  async update(code: string, id: string, caller: Caller, input: UpdateRequirementDto) {
+    const meeting = await this.access.require(code, caller, true);
+    const item = await this.prisma.$transaction(async tx => {
+      const previous = await tx.requirement.findFirst({ where: { id, meetingId: meeting.id } });
+      if (!previous) throw new NotFoundException('Requerimiento no encontrado');
+      if (input.version !== previous.version) throw new ConflictException('El requerimiento cambió. Recarga para comparar tus cambios');
+      if (previous.status === 'APPROVED' && input.action !== 'reopen') throw new ConflictException('Reabre el requerimiento antes de modificarlo');
+      if (input.action === 'reopen' && previous.status !== 'APPROVED') throw new BadRequestException('Solo se reabren aprobados');
+      if (input.action && (input.text !== undefined || input.status !== undefined)) throw new BadRequestException('La acción debe enviarse sin otros cambios');
+      const text = input.text?.trim() ?? previous.text;
+      if (!text || text.length > 5000) throw new BadRequestException('Texto inválido');
+      const status = input.action === 'reopen' ? 'PENDING' : input.status ?? (text !== previous.text ? 'CORRECTED' : previous.status);
+      if (input.status === 'APPROVED' && text !== previous.text) throw new BadRequestException('Guarda el texto corregido antes de aprobar');
+      const history = [...(Array.isArray(previous.history) ? previous.history : []), { text: previous.text, status: previous.status, discarded: previous.discarded, version: previous.version, author: meeting.hostId, at: new Date().toISOString() }];
+      const changed = await tx.requirement.updateMany({ where: { id, version: input.version }, data: { text, status, history, version: { increment: 1 }, discarded: input.action === 'discard' ? true : input.action === 'restore' ? false : previous.discarded } });
+      if (!changed.count) throw new ConflictException('Otro cambio fue guardado primero');
+      return tx.requirement.findUniqueOrThrow({ where: { id }, include });
     });
+    this.events.emit('workspace.changed', { code, resource: 'requirements' });
+    return item;
   }
 }
