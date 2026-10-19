@@ -1,3 +1,4 @@
+import { api } from '../../lib/api';
 import { useEffect, useState } from 'react';
 import {
   getRequirements,
@@ -12,12 +13,14 @@ interface RequirementsPanelProps {
   code: string;
   token: string;
   refreshVersion: number;
+  canEdit?: boolean;
 }
 
 interface RequirementCardProps {
   requirement: Requirement;
   code: string;
   token: string;
+  canEdit: boolean;
   onUpdated: (requirement: Requirement) => void;
 }
 
@@ -56,6 +59,7 @@ function RequirementCard({
   code,
   token,
   onUpdated,
+  canEdit,
 }: RequirementCardProps) {
   const [text, setText] = useState(requirement.text);
   const [status, setStatus] = useState(requirement.status);
@@ -72,7 +76,7 @@ function RequirementCard({
   }, [requirement.text, requirement.status]);
 
   async function save() {
-    if (saving || isApproved) return;
+    if (saving || isApproved || !canEdit) return;
 
     const trimmed = text.trim();
 
@@ -84,7 +88,7 @@ function RequirementCard({
     if (
       status === 'APPROVED' &&
       !window.confirm(
-        '¿Aprobar este requerimiento? Después no podrás editar su texto ni cambiar su estado.',
+        '¿Aprobar este requerimiento? Para cambiarlo deberás reabrirlo.',
       )
     ) {
       return;
@@ -99,6 +103,7 @@ function RequirementCard({
         requirement.id,
         token,
         {
+          version: requirement.version,
           text: trimmed,
           status,
         },
@@ -128,7 +133,7 @@ function RequirementCard({
           value={isApproved ? requirement.text : text}
           maxLength={5000}
           rows={4}
-          disabled={saving || isApproved}
+          disabled={saving || isApproved || !canEdit}
           onChange={(event) => {
             const nextText = event.target.value;
             setText(nextText);
@@ -146,7 +151,7 @@ function RequirementCard({
         Estado
         <select
           value={isApproved ? 'APPROVED' : status}
-          disabled={saving || isApproved}
+          disabled={saving || isApproved || !canEdit}
           onChange={(event) => {
             setStatus(event.target.value as RequirementStatus);
             setError('');
@@ -160,12 +165,12 @@ function RequirementCard({
 
       {isApproved ? (
         <p>
-          Requerimiento aprobado. Su texto y estado están bloqueados.
+          Requerimiento aprobado. Reábrelo para crear una nueva revisión.
         </p>
       ) : (
         <button
           type="button"
-          disabled={saving || !text.trim()}
+          disabled={saving || !text.trim() || !canEdit}
           onClick={() => void save()}
         >
           {saving ? 'Guardando…' : 'Guardar cambios'}
@@ -174,7 +179,13 @@ function RequirementCard({
 
       {error && <p role="alert">{error}</p>}
 
-      <details>
+      {canEdit && <div className="actions">
+        {(isApproved ? ['reopen'] : [requirement.discarded ? 'restore' : 'discard']).map(action => <button key={action} className="secondary" disabled={saving} onClick={() => {
+          setSaving(true); void updateRequirement(code, requirement.id, token, { version: requirement.version, action: action as 'reopen' | 'discard' | 'restore' }).then(onUpdated).catch(e => setError(errorMessage(e))).finally(() => setSaving(false));
+        }}>{action === 'reopen' ? 'Reabrir' : action === 'discard' ? 'Descartar' : 'Restaurar'}</button>)}
+      </div>}
+      <details><summary>Historial ({requirement.history?.length ?? 0})</summary>{requirement.history?.map(h => <p key={h.version}>v{h.version} · {h.status} · {h.text}</p>)}</details>
+      {requirement.transcriptSegment && <details>
         <summary>Ver transcripción de origen</summary>
 
         <p>
@@ -196,7 +207,7 @@ function RequirementCard({
           <strong>Propuesta original:</strong>{' '}
           {requirement.originalText}
         </p>
-      </details>
+      </details>}
     </article>
   );
 }
@@ -205,7 +216,10 @@ export default function RequirementsPanel({
   code,
   token,
   refreshVersion,
+  canEdit = false,
 }: RequirementsPanelProps) {
+  const [manual, setManual] = useState('');
+  const [showDiscarded, setShowDiscarded] = useState(false);
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -227,7 +241,7 @@ export default function RequirementsPanel({
   };
 
   const visibleRequirements = requirements.filter(
-    (item) => item.status === activeStatus,
+    (item) => item.status === activeStatus && item.discarded === showDiscarded,
   );
 
   useEffect(() => {
@@ -289,6 +303,10 @@ export default function RequirementsPanel({
       <h3>Requerimientos</h3>
 
       <p>Las nuevas propuestas aparecen en Pendientes.</p>
+      <label><input type="checkbox" checked={showDiscarded} onChange={e => setShowDiscarded(e.target.checked)} /> Ver descartados</label>
+      {canEdit && <form onSubmit={e => { e.preventDefault(); void api(`/meetings/${code}/requirements`, { token, method: 'POST', body: { text: manual } }).then(() => { setManual(''); setReload(n => n + 1); }).catch(e => setError(errorMessage(e))); }}>
+        <label>Nuevo requerimiento<textarea value={manual} onChange={e => setManual(e.target.value)} maxLength={5000} /></label><button disabled={!manual.trim()}>Agregar</button>
+      </form>}
 
       <div
         className="requirement-filters"
@@ -338,6 +356,7 @@ export default function RequirementsPanel({
           <RequirementCard
             key={requirement.id}
             requirement={requirement}
+            canEdit={canEdit}
             code={code}
             token={token}
             onUpdated={handleUpdated}

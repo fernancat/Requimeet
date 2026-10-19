@@ -129,6 +129,7 @@ export default function MeetingRoomPage({
         }
       });
     });
+    s.on('workspace:changed', () => setRequirementsVersion(n => n + 1));
     s.on(RT_EVENTS.serverParticipants, (payload: ParticipantsPayload) => {
       setParticipants(payload.participants);
     });
@@ -418,6 +419,7 @@ export default function MeetingRoomPage({
             code={code}
             token={token}
             refreshVersion={requirementsVersion}
+            canEdit={isHost}
           />
         )}
       </main>

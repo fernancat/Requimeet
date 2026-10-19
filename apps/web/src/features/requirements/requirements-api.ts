@@ -6,6 +6,9 @@ export type RequirementStatus =
   | 'APPROVED';
 
 export interface Requirement {
+  version: number;
+  discarded: boolean;
+  history: { text: string; status: string; version: number; at: string }[];
   id: string;
   meetingId: string;
   transcriptSegmentId: string;
@@ -33,6 +36,8 @@ export interface Requirement {
 }
 
 export interface UpdateRequirementInput {
+  version: number;
+  action?: "reopen" | "discard" | "restore";
   text?: string;
   status?: RequirementStatus;
 }
