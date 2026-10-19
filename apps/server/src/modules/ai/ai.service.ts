@@ -1,3 +1,4 @@
+import { LIVE_ANALYSIS_PROMPT } from './live-analysis.prompt';
 import {
   Injectable,
   OnModuleInit,
@@ -45,7 +46,7 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
     });
     this.timer = setInterval(
       () => void this.processNext().catch(() => {}),
-      2000,
+      500,
     );
     this.timer.unref();
     const meetings = await this.prisma.meeting.findMany({
@@ -66,7 +67,7 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
     const timer = setTimeout(() => {
       this.timers.delete(meetingId);
       void this.enqueueAnalysis(meetingId).catch(() => {});
-    }, 1500);
+    }, 800);
     timer.unref();
     this.timers.set(meetingId, timer);
   }
@@ -117,7 +118,7 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
       },
       update: {},
     });
-    void this.notify(meetingId);
+    await this.notify(meetingId);
     return job;
   }
   private async enqueueAnalysis(meetingId: string, retry = false) {
@@ -129,7 +130,7 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
       },
     });
     if (active) return active;
-    const pending = await this.prisma.transcriptSegment.findMany({
+    let pending = await this.prisma.transcriptSegment.findMany({
       where: {
         meetingId,
         isFinal: true,
@@ -139,6 +140,14 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
       take: 20,
       include: { participant: { select: { role: true } } },
     });
+    // Explicit retry can revisit an unanswered turn after a prompt fix, even if
+    // its segments were already analyzed. Fingerprinting still deduplicates it.
+    if (!pending.length && retry && await this.prisma.question.count({ where: { meetingId, status: 'ASKED', answer: '' } })) {
+      pending = (await this.prisma.transcriptSegment.findMany({
+        where: { meetingId, isFinal: true }, orderBy: [{ createdAtMs: 'desc' }, { id: 'desc' }], take: 20,
+        include: { participant: { select: { role: true } } },
+      })).reverse();
+    }
     if (!pending.length) return null;
     // Acota caracteres además del número de segmentos.
     const segments: AnalysisInput['segments'] = [];
@@ -171,8 +180,9 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
       orderBy: { createdAt: 'desc' },
     });
     const input = {
+      policyVersion: 'brody-live-v2',
       segments,
-      context: context.map(s => ({ id: s.id, text: s.text.slice(0, 3000), revision: s.revision, createdAtMs: s.createdAtMs, speakerRole: s.participant?.role })),
+      context: context.slice().reverse().map(s => ({ id: s.id, text: s.text.slice(0, 3000), revision: s.revision, createdAtMs: s.createdAtMs, speakerRole: s.participant?.role })),
       requirements,
       questions: questions.map(q => ({ id: q.id, version: q.version, text: q.text, status: q.status, answer: q.answer,
         eligibleSourceIds: ['PENDING', 'ASKED'].includes(q.status) && !q.answer
@@ -248,8 +258,9 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
     const input = job.input as unknown as AnalysisInput;
     const result = analysisSchema.parse(
       await this.router.generate(
-        'Extrae solo nuevos requerimientos y preguntas útiles para el anfitrión en vivo. No repitas los existentes ni preguntas resueltas/descartadas. Guía una entrevista de descubrimiento natural: actividad de la empresa, proceso actual, personas involucradas, dificultades, objetivo del sistema, y luego reglas, permisos y excepciones. Propón la siguiente pregunta concreta según lo ya contado, sin repetir temas resueltos; máximo 2 preguntas por lote. No sugieras campos o funcionalidades sin conocer el contexto. Devuelve también askedQuestions:[{questionId,sourceId,quote}] cuando el anfitrión (speakerRole=host) realmente formule una pregunta PENDING, aunque la parafrasee. Usa una cita literal de sus eligibleSourceIds. Mencionar el tema, leer una respuesta o pedir que alguien haga la pregunta NO cuenta como haberla formulado. No detectes preguntas en segmentos anteriores a su creación. Puede haber pregunta y respuesta en el mismo segmento o lote. JSON: {"requirements":[{"text":"...","sourceIds":["id"]}],"questions":[{"text":"...","category":"permissions|validations|rules|exceptions|missing","reason":"...","priority":"HIGH|MEDIUM|LOW","sourceIds":["id"]}]}. Usa IDs de segments o context como evidencia. Además devuelve "answerSuggestions":[{"questionId":"id","text":"respuesta sintetizada","sourceIds":["id"]}]. Para preguntas ASKED o PENDING detectadas en askedQuestions en este mismo lote, con eligibleSourceIds, evalúa si esos segmentos responden explícitamente a la pregunta. Usa SOLO sus eligibleSourceIds y texto posterior a la pregunta detectada (también puede ser del mismo segmento); no confundir repetir la pregunta con responderla. No inventes decisiones ni completes respuestas ambiguas. Si no hay ninguna respuesta relacionada devuelve []; si es parcial o dudosa devuelve una propuesta uncertain con la duda concreta. Cualquier participante, incluido el anfitrión, puede responder. Añade clarity (clear, uncertain o contradictory), reason (explica la duda cuando la haya) y quotes:[{sourceId,text}] con citas literales de los segmentos elegibles. Marca clear SOLO si la respuesta es explícita, completa para TODOS los aspectos de la pregunta, no tentativa y no contradice el contexto, requerimientos o respuestas vigentes. No basta mencionar el tema ni repetir la pregunta. Si falta un límite, rol, excepción solicitada o hay expresiones como quizá/creo/no sé, usa uncertain. Si hay decisiones incompatibles usa contradictory. Para clear incluye citas literales que sustenten toda la respuesta; el servidor resolverá automáticamente. Para dudas sí devuelve una propuesta con reason para pedir aclaración, sin inventar lo que falta.',
+        LIVE_ANALYSIS_PROMPT,
         input,
+        { live: true },
       ),
     );
     const allowed = new Set(

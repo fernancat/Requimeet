@@ -126,4 +126,16 @@ describe('respuestas habladas de Brody', () => {
     expect((await prisma.question.findUniqueOrThrow({ where: { id: question.id } })).status).toBe('PENDING');
   });
 
+  it('permite revisar explícitamente una pregunta sin respuesta con segmentos ya analizados', async () => {
+    const { meeting, question, segment, caller } = await setup();
+    await prisma.transcriptSegment.update({ where: { id: segment.id }, data: { analyzedRevision: segment.revision } });
+    generate.mockResolvedValue(output(question.id, segment.id));
+    const queued = await ai.analyze(meeting.code, caller);
+    expect(queued.job).not.toBeNull();
+    await ai.processNext();
+    expect((await prisma.question.findUniqueOrThrow({ where: { id: question.id } })).answerSuggestion).not.toBeNull();
+    const again = await ai.analyze(meeting.code, caller);
+    expect(again.job?.id).not.toBe(queued.job?.id); // version changed with the saved proposal
+  });
+
 });
