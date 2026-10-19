@@ -18,6 +18,7 @@ export default function BrodyAssistant({ code, token, canEdit, refreshVersion, i
   const [currentId, setCurrentId] = useState<string>();
   const [deferred, setDeferred] = useState<string[]>([]);
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [correcting, setCorrecting] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -28,7 +29,23 @@ export default function BrodyAssistant({ code, token, canEdit, refreshVersion, i
   const failed = analysis.data?.jobs[0]?.status === 'failed';
   const openCount = questions.data?.filter(q => q.status === 'PENDING' || q.status === 'ASKED').length ?? 0;
   const detected = (requirements.data ?? []).filter(r => !r.discarded).slice().reverse();
+  const automaticAnswers = (questions.data ?? []).filter(q => q.automaticResolution && q.status === 'RESOLVED').slice().reverse();
   const suggestion = current?.answerSuggestion;
+  async function correctAutomatic(item: QuestionDto, reopen = false) {
+    setBusy(true); setError('');
+    try {
+      const updated = await api<QuestionDto>(`/meetings/${code}/questions/${item.id}`, { token, method: 'PATCH', body: {
+        version: item.version, text: item.text, status: reopen ? 'ASKED' : 'RESOLVED',
+        answer: reopen ? '' : answers[item.id] ?? item.answer, evidenceIds: reopen ? [] : item.evidenceIds,
+      } });
+      questions.setData(items => items?.map(q => q.id === item.id ? updated : q) ?? [updated]);
+      setAnswers(items => { const next = { ...items }; delete next[item.id]; return next; });
+      setCorrecting(undefined);
+      if (reopen) { setCurrentId(item.id); setDeferred(items => items.filter(id => id !== item.id)); }
+      setNotice(reopen ? 'Retomemos esa pregunta para aclararla.' : 'Corrección guardada.');
+    } catch (e) { setError(e instanceof Error ? e.message : 'No se pudo corregir'); void questions.reload(); }
+    finally { setBusy(false); }
+  }
   const analyzedSinceAsked = current?.askedAt && analysis.data?.jobs.some(job => job.kind === 'analysis' && job.status === 'completed' && new Date(job.updatedAt).getTime() > new Date(current.askedAt!).getTime());
   const answerText = current ? answers[current.id] ?? (current.answer || suggestion?.text || '') : '';
   async function changeQuestion(status: QuestionStatus, dismissSuggestion = false) {
@@ -65,19 +82,30 @@ export default function BrodyAssistant({ code, token, canEdit, refreshVersion, i
     <div className="brody-conversation">
       <Suspense fallback={<div className="brody-avatar" />}><BrodyAvatar /></Suspense>
       <div className="brody-bubble" aria-live="polite" aria-atomic="true">
-        {current ? <><h3>{suggestion ? 'Esto entendí de la respuesta' : current.status === 'ASKED' ? (micOn ? 'Esperando una respuesta hablada' : 'Activa el micrófono para responder') : 'Ahora podrías preguntar'}</h3><p className="brody-question">{suggestion?.text ?? current.text}</p></>
+        {current ? <><h3>{suggestion ? 'Necesito aclarar esta respuesta' : current.status === 'ASKED' ? (micOn ? 'Esperando una respuesta hablada' : 'Activa el micrófono para responder') : 'Ahora podrías preguntar'}</h3><p className="brody-question">{suggestion?.text ?? current.text}</p></>
           : <p>{interrupted ? 'La transcripción se interrumpió. Las sugerencias guardadas siguen aquí.' : deferred.length ? 'Dejamos algunas preguntas para después. Puedes retomarlas cuando encajen en la conversación.' : 'Conversemos sobre lo que necesitan. Aquí te propondré qué preguntar y te mostraré los requerimientos que vaya detectando.'}</p>}
       </div>
     </div>
     {detected.length > 0 && <button className="secondary brody-detection-alert" onClick={() => detectionsRef.current?.scrollIntoView({ block: 'nearest', behavior: 'instant' })}><span role="status">{detected.length} requerimientos detectados</span> · Ver aquí</button>}
     <div className="brody-scroll">
+      {automaticAnswers.length > 0 && <section aria-label="Respuestas guardadas por Brody">
+        <p className="brody-notice" role="status">Guardé {automaticAnswers.length === 1 ? 'una respuesta clara' : `${automaticAnswers.length} respuestas claras`}. Podemos continuar.</p>
+        {automaticAnswers.filter((item, index) => index < 5 || answers[item.id] !== undefined).map(item => <details key={item.id} open={correcting === item.id || answers[item.id] !== undefined ? true : undefined}>
+          <summary>Guardado: {item.answer}</summary>
+          <p>{item.text}</p>
+          {canEdit && <>
+            {(correcting === item.id || answers[item.id] !== undefined) && <><label htmlFor={`correction-${item.id}`}>Corregir respuesta guardada</label><textarea id={`correction-${item.id}`} value={answers[item.id] ?? item.answer} maxLength={5000} onChange={e => setAnswers(items => ({ ...items, [item.id]: e.target.value }))} /><button disabled={busy || !(answers[item.id] ?? item.answer).trim()} onClick={() => void correctAutomatic(item)}>Guardar corrección</button></>}
+            <div className="brody-actions"><button className="secondary" disabled={busy} onClick={() => setCorrecting(item.id)}>Corregir</button><button className="secondary" disabled={busy} onClick={() => void correctAutomatic(item, true)}>Seguir aclarando</button></div>
+          </>}
+        </details>)}
+      </section>}
       {notice && <p className="brody-notice" role="status">{notice}</p>}
       {(error || questions.error || requirements.error || analysis.error) && <p role="alert">{error || questions.error || requirements.error || analysis.error}</p>}
       {failed && <p role="alert">El último análisis falló. Puedes reintentarlo con «Analizar ahora».</p>}
       {current && <div className="brody-next">
-        {suggestion && <p>Para la pregunta: {current.text}</p>}
+        {suggestion && <><p>Para la pregunta: {current.text}</p><p role="status">{suggestion.reason || '¿Esto refleja lo acordado? Confírmalo o acláralo hablando.'}</p></>}
         {current.status === 'ASKED' && !suggestion && <div className="brody-listening" role="status">
-          <p>{!micOn ? 'Tu micrófono está apagado. Puedes activarlo y responder tú mismo; no necesitas otro participante.' : working ? 'Estoy analizando la transcripción para identificar la respuesta…' : analyzedSinceAsked ? 'Ya analicé el texto, pero aún no identifiqué una respuesta clara. Puedes aclararla hablando o escribirla abajo.' : 'Responde en voz alta y haz una pausa. Cuando llegue el texto confirmado, buscaré la respuesta y te la propondré aquí.'}</p>
+          <p>{!micOn ? 'Tu micrófono está apagado. Puedes activarlo y responder tú mismo; no necesitas otro participante.' : working ? 'Estoy analizando la transcripción para identificar la respuesta…' : analyzedSinceAsked ? 'Ya analicé el texto, pero aún no identifiqué una respuesta clara. Puedes aclararla hablando o escribirla abajo.' : 'Responde en voz alta y haz una pausa. Cuando llegue el texto confirmado, buscaré la respuesta y la guardaré si es clara. Si tengo dudas, te pediré aclaración.'}</p>
           <p><strong>Último texto recibido:</strong> {transcriptText || 'Todavía no llega texto del audio. Comprueba el micrófono y sus permisos.'}</p>
           {failed && <p>El análisis falló. Reintenta con «Analizar ahora» o escribe la respuesta.</p>}
         </div>}
@@ -107,7 +135,7 @@ export default function BrodyAssistant({ code, token, canEdit, refreshVersion, i
       </section>
       <details className="brody-transcript"><summary>Último fragmento de la conversación</summary><p>{transcriptText || 'Todavía no hay transcripción. Activa el micrófono y empieza a hablar.'}</p></details>
       {canEdit && <button className="secondary" disabled={busy || working || !analysis.data?.enabled} onClick={() => void analyze()}>Analizar ahora</button>}
-      <small className="brody-disclaimer">Brody sugiere; tú decides. Las respuestas y aprobaciones se guardan en el levantamiento.</small>
+      <small className="brody-disclaimer">Brody guarda respuestas claras y pide aclaración si hay dudas. Puedes corregir lo guardado. Los requerimientos se aprueban por separado.</small>
     </div>
   </section>;
 }

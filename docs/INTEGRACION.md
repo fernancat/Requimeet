@@ -127,12 +127,21 @@ Aplicar `prisma:deploy` y `prisma:generate` para la migración
 `20261019050000_question_answer_suggestions` (ya aplicada en el entorno local).
 Recargar el frontend. Marcar «Ya la pregunté» antes de responder, hablar con el
 micrófono activo y hacer una pausa. No se necesita otro participante. Cuando llega
-la transcripción final, la IA propone «Esto entendí de la respuesta». Revisar o
-editar el texto y pulsar «Confirmar respuesta y continuar». La propuesta no cierra
-la pregunta automáticamente. «No era esa respuesta» reinicia la escucha.
+la transcripción final, Brody guarda y avanza automáticamente si la respuesta es
+explícita, completa y sustentada por citas verificadas. Si hay dudas, muestra
+«Necesito aclarar esta respuesta»: se puede aclarar hablando o confirmar/editando
+la propuesta. Las respuestas automáticas quedan visibles con «Corregir» y «Seguir
+aclarando». «No era esa respuesta» reinicia la escucha.
 
 Mientras espera, Brody muestra el último texto recibido, el micrófono apagado,
 el análisis en curso o que no encontró una respuesta clara. Si no aparece texto,
 revisar micrófono/permisos y conexión de transcripción; si hay texto sin propuesta,
 se puede aclarar hablando o guardar una respuesta manual. La latencia depende de
 la finalización del audio y del proveedor, no del número de participantes.
+
+
+Avance automático: migración `20261019060000_question_auto_resolution` aplicada en
+el entorno local. Una respuesta resuelta automáticamente no aprueba requerimientos.
+La clasificación de claridad depende del modelo; se conservan evidencia, historial
+y corrección manual. Respuestas parciales, tentativas o contradictorias requieren
+aclaración. El anfitrión sigue marcando «Ya la pregunté» al realizar una pregunta.

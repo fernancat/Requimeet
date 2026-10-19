@@ -67,3 +67,18 @@ reales de reuniones. Los scripts reproducibles están documentados en INTEGRACIO
   persistida con fuentes y estado ASKED. Confirmación desde Chromium verificada
   en PostgreSQL como RESOLVED. Esta prueba valida el enlace transcripción→IA→UI,
   no una nueva prueba de reconocimiento de voz mediante micrófono físico.
+
+## Avance automático de respuestas
+
+- 53 tests frontend y 8 casos de integración de respuestas aprobados. Resto de los
+  65 tests del servidor también pasan en la ejecución de la suite; se corrigió
+  la aserción anterior de propuesta para incluir el nuevo motivo de aclaración.
+- Clasificación clara con cita literal resuelve y registra historial; uncertain,
+  contradictory, clasificación omitida o citas no verificables mantienen ASKED.
+- Reapertura de respuesta automática, protección de edición concurrente y
+  conservación de borrador local durante el avance automático comprobadas.
+- Builds de servidor y frontend correctos. La detección se ejecuta dentro del lote
+  existente, sin nuevas llamadas de IA por cada actualización de interfaz.
+- OpenRouter real con texto sintético: resolución automática persistida en
+  PostgreSQL. Chromium mostró la respuesta guardada sin confirmación y permitió
+  reabrirla con «Seguir aclarando», persistiendo ASKED. No se utilizó micrófono físico.

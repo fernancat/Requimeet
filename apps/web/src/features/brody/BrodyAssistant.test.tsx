@@ -53,7 +53,7 @@ describe('Brody live interaction', () => {
     fireEvent.change(screen.getByLabelText('Respuesta acordada'), { target: { value: 'Mi precisión manual' } });
     questions = [{ ...questions[0], version: 4, answerSuggestion: { text: 'Solo los administradores.', sourceIds: ['s1'] } }];
     view.rerender(<BrodyAssistant {...props} refreshVersion={1} />);
-    await screen.findByText('Esto entendí de la respuesta');
+    await screen.findByText('Necesito aclarar esta respuesta');
     expect((screen.getByLabelText('Respuesta acordada') as HTMLTextAreaElement).value).toBe('Mi precisión manual');
     expect(screen.getByText('Confirmar respuesta y continuar')).toBeTruthy();
   });
@@ -62,6 +62,19 @@ describe('Brody live interaction', () => {
     render(<BrodyAssistant {...props} micOn={false} />);
     await screen.findByText('Activa el micrófono para responder');
     expect(screen.getByText(/no necesitas otro participante/)).toBeTruthy();
+  });
+
+  it('advances automatically on a resolved answer and retains a concurrent local draft for correction', async () => {
+    questions[0].status = 'ASKED';
+    questions.push(makeQuestion('siguiente'));
+    const view = render(<BrodyAssistant {...props} />);
+    await screen.findByText('Pregunta primera');
+    fireEvent.change(screen.getByLabelText('Respuesta acordada'), { target: { value: 'Mi precisión' } });
+    questions = [{ ...questions[0], status: 'RESOLVED', answer: 'Solo administradores.', automaticResolution: true }, questions[1]];
+    view.rerender(<BrodyAssistant {...props} refreshVersion={1} />);
+    await screen.findByText('Pregunta siguiente');
+    expect((screen.getByLabelText('Corregir respuesta guardada') as HTMLTextAreaElement).value).toBe('Mi precisión');
+    expect(screen.getByText('Guardé una respuesta clara. Podemos continuar.')).toBeTruthy();
   });
 
 });

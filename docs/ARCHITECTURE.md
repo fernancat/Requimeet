@@ -141,7 +141,7 @@ prioridad. «Después» aplaza localmente sin descartar la pregunta en la base.
 Las respuestas, descartes y aprobaciones usan los contratos existentes con versión
 esperada y autorización del servidor. Los borradores permanecen al cambiar de panel;
 un conflicto muestra el error y conserva la respuesta local. Brody no infiere una
-aprobación ni resuelve preguntas automáticamente. Los editores completos siguen en
+aprobación de requerimientos. Resuelve preguntas con respuestas claras y verificadas. Los editores completos siguen en
 «Revisión detallada» y en la revisión posterior.
 
 El avatar carga Three.js de forma diferida y un GLB local CC0 de Quaternius (404 KB).
@@ -153,14 +153,18 @@ La licencia y procedencia están en `apps/web/public/models/brody/LICENSE.txt`.
 
 `Question.askedAt` marca el inicio de la escucha al pasar a ASKED. El análisis
 incremental también produce `answerSuggestions` opcionales para preguntas realizadas,
-sin respuesta humana ni propuesta vigente. Cada pregunta expone al proveedor solo
-los IDs de segmentos finales nuevos con `createdAtMs >= askedAt` como evidencia
+sin respuesta humana. Una propuesta dudosa puede aclararse con nuevos segmentos. Cada pregunta expone al proveedor los
+IDs de segmentos finales nuevos y del contexto reciente con `createdAtMs >= askedAt` como evidencia
 permitida. Puede responder el anfitrión o cualquier participante admitido.
 
 La propuesta se persiste en `Question.answerSuggestion` con control de versión,
 validación de pertenencia y revisión de las fuentes. Una edición humana o corrección
 de la transcripción durante la inferencia evita guardar la propuesta obsoleta.
-La pregunta sigue ASKED hasta confirmación explícita del anfitrión; confirmar guarda
-respuesta y evidencia y pasa a RESOLVED. Rechazar limpia la propuesta y reinicia
+El proveedor clasifica claridad como clear, uncertain o contradictory y adjunta
+citas literales. Solo clear con citas verificadas permite guardar respuesta/evidencia,
+marcar RESOLVED y automaticResolution=true y avanzar sin botón. En los otros casos
+la pregunta sigue ASKED y se muestra la duda para confirmación o aclaración oral.
+El historial identifica a Brody y la ejecución. La interfaz muestra las respuestas
+automáticas con acciones para corregir o seguir aclarando. Rechazar limpia la propuesta y reinicia
 `askedAt`, sin volver a usar el mismo texto. El historial conserva la propuesta al
 editar. No se agregan llamadas IA: la detección comparte el lote incremental.
