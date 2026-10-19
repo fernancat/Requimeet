@@ -373,7 +373,14 @@ export class MeetingsService {
     for (let attempt = 0; attempt < 5; attempt++) {
       try {
         return await this.prisma.meeting.create({
-          data: { code: generateMeetingCode(), title, hostId: hostUserId },
+          data: { code: generateMeetingCode(), title, hostId: hostUserId,
+            questions: { create: {
+              text: 'Para empezar, ¿a qué se dedica la empresa?',
+              normalizedText: 'para empezar a que se dedica la empresa',
+              category: 'missing', reason: 'Conocer la actividad de la empresa antes de profundizar en sus procesos y necesidades.',
+              priority: 'HIGH', sourceIds: [],
+            } },
+          },
         });
       } catch (error) {
         if (
