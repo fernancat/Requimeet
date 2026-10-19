@@ -168,6 +168,7 @@ model AiJob {
   @@index([status, createdAt])
 }
 model Question {
+  automaticResolution Boolean @default(false)
   askedAt DateTime?
   answerSuggestion Json?
   id String @id @default(uuid())
