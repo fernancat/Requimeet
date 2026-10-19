@@ -32,6 +32,8 @@ model Meeting {
   messages           ChatMessage[]
   transcriptSegments TranscriptSegment[]
   requirements       Requirement[]
+  aiJobs             AiJob[]
+  questions          Question[]
 }
 
 model GuestSession {
@@ -107,6 +109,7 @@ model TranscriptSegment {
   originalText  String?
   revision      Int      @default(1)
   isFinal       Boolean  @default(true)
+  analyzedRevision Int @default(0)
   edited        Boolean  @default(false)
   trackStartMs  Float?
   trackEndMs    Float?
@@ -143,4 +146,39 @@ model Requirement {
   @@unique([transcriptSegmentId, originalText])
   @@index([meetingId, status])
   @@index([transcriptSegmentId])
+}
+
+model AiJob {
+  id String @id @default(uuid())
+  meetingId String
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  kind String @default("analysis")
+  fingerprint String
+  status String @default("queued")
+  input Json
+  output Json?
+  attempts Int @default(0)
+  error String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([meetingId, kind, fingerprint])
+  @@index([status, createdAt])
+}
+model Question {
+  id String @id @default(uuid())
+  meetingId String
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  text String
+  normalizedText String
+  category String
+  reason String
+  priority String
+  sourceIds String[]
+  status String @default("PENDING")
+  answer String @default("")
+  evidenceIds String[] @default([])
+  version Int @default(1)
+  history Json @default("[]")
+  createdAt DateTime @default(now())
+  @@unique([meetingId, normalizedText])
 }

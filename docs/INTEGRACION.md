@@ -48,3 +48,6 @@ con backoff al publicar resultados.
 
 ## Transcripción persistente (20)
 Los resultados usan resultId estable y revision incremental. TranscriptsService guarda parciales y finales; solo los finales emiten transcript.confirmed. GET /meetings/:code/transcripts recupera páginas de 100 segmentos. El propietario puede corregir finales con PATCH y versión esperada. Se conserva original e historial. El cierre espera al processor hasta 15 segundos antes de borrar la sala; resultados tardíos se aceptan durante 30 segundos desde endedAt. El buffer de audio es acotado: una caída prolongada puede dejar fragmentos incompletos, nunca se presentan como confirmados.
+
+## IA incremental (22)
+AiModule escucha transcript.confirmed con agrupación de 1.5 segundos. PostgreSQL conserva AiJob y analyzedRevision; el worker de un único servidor toma trabajos cada 2 segundos, sin llamadas LLM en el ingreso multimedia. Reinicios recuperan trabajos pendientes, máximo tres intentos y timeout de 45 segundos por generación. La configuración verifica el ID exacto deepseek/deepseek-v4-flash en OpenRouter. Las respuestas JSON se validan y solo aceptan fuentes de la reunión; ninguna propuesta sobrescribe texto humano. No ejecutar múltiples instancias del worker sin implementar leases distribuidos.

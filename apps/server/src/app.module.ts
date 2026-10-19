@@ -1,3 +1,4 @@
+import { AiModule } from './modules/ai/ai.module';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
@@ -20,6 +21,7 @@ import { RequirementsModule } from './modules/requirements/requirements.module';
     RealtimeModule,
     ProcessingModule,
     RequirementsModule,
+    AiModule,
   ],
 })
 export class AppModule {}

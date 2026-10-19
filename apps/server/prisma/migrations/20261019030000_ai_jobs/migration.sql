@@ -1,0 +1,6 @@
+ALTER TABLE "TranscriptSegment" ADD COLUMN "analyzedRevision" INTEGER NOT NULL DEFAULT 0;
+CREATE TABLE "AiJob" ("id" TEXT PRIMARY KEY, "meetingId" TEXT NOT NULL REFERENCES "Meeting"("id") ON DELETE CASCADE, "kind" TEXT NOT NULL DEFAULT 'analysis', "fingerprint" TEXT NOT NULL, "status" TEXT NOT NULL DEFAULT 'queued', "input" JSONB NOT NULL, "output" JSONB, "attempts" INTEGER NOT NULL DEFAULT 0, "error" TEXT, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL);
+CREATE UNIQUE INDEX "AiJob_meetingId_kind_fingerprint_key" ON "AiJob"("meetingId","kind","fingerprint");
+CREATE INDEX "AiJob_status_createdAt_idx" ON "AiJob"("status","createdAt");
+CREATE TABLE "Question" ("id" TEXT PRIMARY KEY, "meetingId" TEXT NOT NULL REFERENCES "Meeting"("id") ON DELETE CASCADE, "text" TEXT NOT NULL, "normalizedText" TEXT NOT NULL, "category" TEXT NOT NULL, "reason" TEXT NOT NULL, "priority" TEXT NOT NULL, "sourceIds" TEXT[] NOT NULL, "status" TEXT NOT NULL DEFAULT 'PENDING', "answer" TEXT NOT NULL DEFAULT '', "evidenceIds" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[], "version" INTEGER NOT NULL DEFAULT 1, "history" JSONB NOT NULL DEFAULT '[]', "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE UNIQUE INDEX "Question_meetingId_normalizedText_key" ON "Question"("meetingId","normalizedText");
