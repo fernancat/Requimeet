@@ -21,13 +21,14 @@ describe('respuestas habladas de Brody', () => {
   });
   afterEach(() => ai.onModuleDestroy());
   afterAll(() => prisma.$disconnect());
-  async function setup() {
+  async function setup(manual = true) {
     const host = await prisma.hostUser.create({ data: { email: 'answer@test.local', passwordHash: 'test', displayName: 'Host' } });
     const meeting = await prisma.meeting.create({ data: { code: 'ANSWER', title: 'Prueba', hostId: host.id, status: 'active' } });
     const question = await prisma.question.create({ data: { meetingId: meeting.id, text: '¿Quién aprueba?', normalizedText: 'quien aprueba', category: 'permissions', reason: 'Falta rol', priority: 'HIGH', sourceIds: [] } });
     const caller = { kind: 'host' as const, hostUserId: host.id };
-    const asked = await questions.edit(meeting.code, question.id, caller, { version: 1, text: question.text, status: 'ASKED', answer: '', evidenceIds: [] });
-    const segment = await prisma.transcriptSegment.create({ data: { meetingId: meeting.id, resultId: 'spoken', text: 'Solo los administradores aprueban.', isFinal: true, createdAtMs: Date.now() + 1 } });
+    const asked = manual ? await questions.edit(meeting.code, question.id, caller, { version: 1, text: question.text, status: 'ASKED', answer: '', evidenceIds: [] }) : question;
+    const participant = await prisma.participant.create({ data: { meetingId: meeting.id, hostUserId: host.id, displayName: 'Host', role: 'host' } });
+    const segment = await prisma.transcriptSegment.create({ data: { meetingId: meeting.id, resultId: 'spoken', participantId: participant.id, text: 'Solo los administradores aprueban.', isFinal: true, createdAtMs: Date.now() + 1 } });
     return { meeting, question: asked, segment, caller };
   }
   const output = (questionId: string, sourceId: string) => ({ requirements: [], questions: [], answerSuggestions: [{ questionId, text: 'Solo los administradores.', sourceIds: [sourceId] }] });
@@ -94,6 +95,35 @@ describe('respuestas habladas de Brody', () => {
     generate.mockResolvedValue({ ...result, answerSuggestions: [{ ...result.answerSuggestions[0], clarity: 'clear', quotes: [{ sourceId: segment.id, text: 'Cita inexistente' }] }] });
     await ai.analyze(meeting.code, caller); await ai.processNext();
     expect((await prisma.question.findUniqueOrThrow({ where: { id: question.id } })).status).toBe('ASKED');
+  });
+
+  it('detecta pregunta del anfitrión y resuelve su respuesta en el mismo lote sin acciones manuales', async () => {
+    const { meeting, question, segment, caller } = await setup(false);
+    const spoken = '¿Quién aprueba las compras? Solo los administradores aprueban.';
+    await prisma.transcriptSegment.update({ where: { id: segment.id }, data: { text: spoken } });
+    generate.mockResolvedValue({ requirements: [], questions: [],
+      askedQuestions: [{ questionId: question.id, sourceId: segment.id, quote: '¿Quién aprueba las compras?' }],
+      answerSuggestions: [{ questionId: question.id, text: 'Solo los administradores.', sourceIds: [segment.id], clarity: 'clear', quotes: [{ sourceId: segment.id, text: 'Solo los administradores aprueban.' }] }],
+    });
+    await ai.analyze(meeting.code, caller); await ai.processNext();
+    const saved = await prisma.question.findUniqueOrThrow({ where: { id: question.id } });
+    expect(saved.status).toBe('RESOLVED'); expect(saved.automaticResolution).toBe(true);
+    expect(JSON.stringify(saved.history)).toContain('question-detected');
+  });
+  it('detecta la pregunta sin confundirla con una respuesta', async () => {
+    const { meeting, question, segment, caller } = await setup(false);
+    await prisma.transcriptSegment.update({ where: { id: segment.id }, data: { text: '¿Quién aprueba?' } });
+    generate.mockResolvedValue({ requirements: [], questions: [], askedQuestions: [{ questionId: question.id, sourceId: segment.id, quote: '¿Quién aprueba?' }] });
+    await ai.analyze(meeting.code, caller); await ai.processNext();
+    const saved = await prisma.question.findUniqueOrThrow({ where: { id: question.id } });
+    expect(saved.status).toBe('ASKED'); expect(saved.answer).toBe('');
+  });
+  it('rechaza detección atribuida al anfitrión cuando habla un invitado', async () => {
+    const { meeting, question, segment, caller } = await setup(false);
+    await prisma.participant.update({ where: { id: segment.participantId! }, data: { role: 'guest' } });
+    generate.mockResolvedValue({ requirements: [], questions: [], askedQuestions: [{ questionId: question.id, sourceId: segment.id, quote: segment.text }] });
+    await ai.analyze(meeting.code, caller); await ai.processNext();
+    expect((await prisma.question.findUniqueOrThrow({ where: { id: question.id } })).status).toBe('PENDING');
   });
 
 });

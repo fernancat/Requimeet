@@ -14,8 +14,8 @@ import { OpenRouterService } from './openrouter.service';
 import { analysisSchema, checkSources, normalize } from './ai.schemas';
 
 type AnalysisInput = {
-  segments: { id: string; text: string; revision: number }[];
-  context: { id: string; text: string; revision?: number; createdAtMs?: number }[];
+  segments: { id: string; text: string; revision: number; createdAtMs?: number; speakerRole?: string }[];
+  context: { id: string; text: string; revision?: number; createdAtMs?: number; speakerRole?: string }[];
   requirements: { text: string; status: string }[];
   questions: { id: string; version: number; text: string; status: string; answer: string; eligibleSourceIds: string[] }[];
 };
@@ -137,6 +137,7 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
       },
       orderBy: [{ createdAtMs: 'asc' }, { id: 'asc' }],
       take: 20,
+      include: { participant: { select: { role: true } } },
     });
     if (!pending.length) return null;
     // Acota caracteres además del número de segmentos.
@@ -144,7 +145,7 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
     let size = 0;
     for (const s of pending) {
       if (size && size + s.text.length > 40000) break;
-      segments.push({ id: s.id, text: s.text, revision: s.revision });
+      segments.push({ id: s.id, text: s.text, revision: s.revision, createdAtMs: s.createdAtMs, speakerRole: s.participant?.role });
       size += s.text.length;
     }
     const context = await this.prisma.transcriptSegment.findMany({
@@ -155,7 +156,7 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
       },
       orderBy: { createdAtMs: 'desc' },
       take: 10,
-      select: { id: true, text: true, revision: true, createdAtMs: true },
+      select: { id: true, text: true, revision: true, createdAtMs: true, participant: { select: { role: true } } },
     });
     const requirements = await this.prisma.requirement.findMany({
       where: { meetingId },
@@ -165,17 +166,17 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
     });
     const questions = await this.prisma.question.findMany({
       where: { meetingId },
-      select: { id: true, version: true, text: true, status: true, answer: true, askedAt: true, answerSuggestion: true },
+      select: { id: true, version: true, text: true, status: true, answer: true, askedAt: true, answerSuggestion: true, createdAt: true },
       take: 100,
       orderBy: { createdAt: 'desc' },
     });
     const input = {
       segments,
-      context: context.map((s) => ({ ...s, text: s.text.slice(0, 3000) })),
+      context: context.map(s => ({ id: s.id, text: s.text.slice(0, 3000), revision: s.revision, createdAtMs: s.createdAtMs, speakerRole: s.participant?.role })),
       requirements,
       questions: questions.map(q => ({ id: q.id, version: q.version, text: q.text, status: q.status, answer: q.answer,
-        eligibleSourceIds: q.status === 'ASKED' && !q.answer && q.askedAt
-          ? [...pending.filter(s => segments.some(item => item.id === s.id)), ...context].filter(s => s.createdAtMs >= q.askedAt!.getTime()).map(s => s.id)
+        eligibleSourceIds: ['PENDING', 'ASKED'].includes(q.status) && !q.answer
+          ? [...pending.filter(s => segments.some(item => item.id === s.id)), ...context].filter(s => s.createdAtMs >= (q.askedAt ?? q.createdAt).getTime()).map(s => s.id)
           : [],
       })),
     };
@@ -247,7 +248,7 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
     const input = job.input as unknown as AnalysisInput;
     const result = analysisSchema.parse(
       await this.router.generate(
-        'Extrae solo nuevos requerimientos y preguntas útiles para el anfitrión en vivo. No repitas los existentes ni preguntas resueltas/descartadas. Prioriza vacíos concretos; máximo 5 preguntas por lote. JSON: {"requirements":[{"text":"...","sourceIds":["id"]}],"questions":[{"text":"...","category":"permissions|validations|rules|exceptions|missing","reason":"...","priority":"HIGH|MEDIUM|LOW","sourceIds":["id"]}]}. Usa IDs de segments o context como evidencia. Además devuelve "answerSuggestions":[{"questionId":"id","text":"respuesta sintetizada","sourceIds":["id"]}]. Para preguntas ASKED con eligibleSourceIds, evalúa si esos segmentos responden explícitamente a la pregunta. Usa SOLO sus eligibleSourceIds; no confundir repetir la pregunta con responderla. No inventes decisiones ni completes respuestas ambiguas. Si no hay ninguna respuesta relacionada devuelve []; si es parcial o dudosa devuelve una propuesta uncertain con la duda concreta. Cualquier participante, incluido el anfitrión, puede responder. Añade clarity (clear, uncertain o contradictory), reason (explica la duda cuando la haya) y quotes:[{sourceId,text}] con citas literales de los segmentos elegibles. Marca clear SOLO si la respuesta es explícita, completa para TODOS los aspectos de la pregunta, no tentativa y no contradice el contexto, requerimientos o respuestas vigentes. No basta mencionar el tema ni repetir la pregunta. Si falta un límite, rol, excepción solicitada o hay expresiones como quizá/creo/no sé, usa uncertain. Si hay decisiones incompatibles usa contradictory. Para clear incluye citas literales que sustenten toda la respuesta; el servidor resolverá automáticamente. Para dudas sí devuelve una propuesta con reason para pedir aclaración, sin inventar lo que falta.',
+        'Extrae solo nuevos requerimientos y preguntas útiles para el anfitrión en vivo. No repitas los existentes ni preguntas resueltas/descartadas. Guía una entrevista de descubrimiento natural: actividad de la empresa, proceso actual, personas involucradas, dificultades, objetivo del sistema, y luego reglas, permisos y excepciones. Propón la siguiente pregunta concreta según lo ya contado, sin repetir temas resueltos; máximo 2 preguntas por lote. No sugieras campos o funcionalidades sin conocer el contexto. Devuelve también askedQuestions:[{questionId,sourceId,quote}] cuando el anfitrión (speakerRole=host) realmente formule una pregunta PENDING, aunque la parafrasee. Usa una cita literal de sus eligibleSourceIds. Mencionar el tema, leer una respuesta o pedir que alguien haga la pregunta NO cuenta como haberla formulado. No detectes preguntas en segmentos anteriores a su creación. Puede haber pregunta y respuesta en el mismo segmento o lote. JSON: {"requirements":[{"text":"...","sourceIds":["id"]}],"questions":[{"text":"...","category":"permissions|validations|rules|exceptions|missing","reason":"...","priority":"HIGH|MEDIUM|LOW","sourceIds":["id"]}]}. Usa IDs de segments o context como evidencia. Además devuelve "answerSuggestions":[{"questionId":"id","text":"respuesta sintetizada","sourceIds":["id"]}]. Para preguntas ASKED o PENDING detectadas en askedQuestions en este mismo lote, con eligibleSourceIds, evalúa si esos segmentos responden explícitamente a la pregunta. Usa SOLO sus eligibleSourceIds y texto posterior a la pregunta detectada (también puede ser del mismo segmento); no confundir repetir la pregunta con responderla. No inventes decisiones ni completes respuestas ambiguas. Si no hay ninguna respuesta relacionada devuelve []; si es parcial o dudosa devuelve una propuesta uncertain con la duda concreta. Cualquier participante, incluido el anfitrión, puede responder. Añade clarity (clear, uncertain o contradictory), reason (explica la duda cuando la haya) y quotes:[{sourceId,text}] con citas literales de los segmentos elegibles. Marca clear SOLO si la respuesta es explícita, completa para TODOS los aspectos de la pregunta, no tentativa y no contradice el contexto, requerimientos o respuestas vigentes. No basta mencionar el tema ni repetir la pregunta. Si falta un límite, rol, excepción solicitada o hay expresiones como quizá/creo/no sé, usa uncertain. Si hay decisiones incompatibles usa contradictory. Para clear incluye citas literales que sustenten toda la respuesta; el servidor resolverá automáticamente. Para dudas sí devuelve una propuesta con reason para pedir aclaración, sin inventar lo que falta.',
         input,
       ),
     );
@@ -256,12 +257,44 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
     );
     for (const item of [...result.requirements, ...result.questions])
       checkSources(item.sourceIds, allowed);
+    const allSegments = [...input.segments, ...input.context];
+    const detections = new Map<string, { sourceId: string; quote: string; at: number }>();
+    for (const asked of result.askedQuestions) {
+      const question = input.questions.find(q => q.id === asked.questionId);
+      const source = allSegments.find(s => s.id === asked.sourceId);
+      if (!question || question.status !== 'PENDING' || !question.eligibleSourceIds.includes(asked.sourceId) ||
+          !source || source.speakerRole !== 'host' || !source.text.includes(asked.quote) || !Number.isFinite(source.createdAtMs))
+        throw new Error('Detección de pregunta sin evidencia válida del anfitrión');
+      detections.set(question.id, { sourceId: source.id, quote: asked.quote, at: source.createdAtMs! });
+    }
     for (const suggestion of result.answerSuggestions) {
       const question = input.questions.find(q => q.id === suggestion.questionId);
-      if (!question || question.status !== 'ASKED') throw new Error('Respuesta para una pregunta no realizada');
+      if (!question || (question.status !== 'ASKED' && !detections.has(question.id))) throw new Error('Respuesta para una pregunta no realizada');
       checkSources(suggestion.sourceIds, new Set(question.eligibleSourceIds ?? []));
+      const detected = detections.get(question.id);
+      if (detected && suggestion.sourceIds.some(id => (allSegments.find(s => s.id === id)?.createdAtMs ?? -1) < detected.at))
+        throw new Error('La respuesta precede a la pregunta');
+      if (detected && suggestion.sourceIds.includes(detected.sourceId) && !suggestion.quotes.some(quote =>
+        quote.sourceId === detected.sourceId && allSegments.find(s => s.id === quote.sourceId)!.text.indexOf(quote.text, allSegments.find(s => s.id === quote.sourceId)!.text.indexOf(detected.quote) + detected.quote.length) >= 0))
+        throw new Error('La pregunta no es evidencia de su propia respuesta');
     }
     await this.prisma.$transaction(async (tx) => {
+      const detectedVersions = new Map<string, number>();
+      for (const [id, detected] of detections) {
+        const question = input.questions.find(q => q.id === id)!;
+        const source = allSegments.find(s => s.id === detected.sourceId)!;
+        const valid = await tx.transcriptSegment.findFirst({ where: { id: source.id, meetingId: job.meetingId, revision: source.revision, isFinal: true } });
+        const previous = await tx.question.findUnique({ where: { id } });
+        if (!valid || !previous || previous.version !== question.version || previous.status !== 'PENDING') continue;
+        const changed = await tx.question.updateMany({ where: { id, version: question.version, status: 'PENDING', answer: '' },
+          data: { status: 'ASKED', askedAt: new Date(detected.at), version: { increment: 1 }, history: [
+            ...(Array.isArray(previous.history) ? previous.history : []),
+            { text: previous.text, answer: previous.answer, status: previous.status, version: previous.version,
+              author: 'brody', at: new Date().toISOString(), event: 'question-detected', sourceId: detected.sourceId, quote: detected.quote, jobId: job.id },
+          ] },
+        });
+        if (changed.count) detectedVersions.set(id, question.version + 1);
+      }
       for (const suggestion of result.answerSuggestions) {
         const question = input.questions.find(q => q.id === suggestion.questionId)!;
         const evidence = await tx.transcriptSegment.findMany({
@@ -270,7 +303,7 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
         });
         if (evidence.length !== new Set(suggestion.sourceIds).size || evidence.some(s => ![...input.segments, ...input.context].some(original => original.id === s.id && original.revision === s.revision))) continue;
         const previous = await tx.question.findUnique({ where: { id: question.id } });
-        if (!previous || previous.version !== question.version || previous.status !== 'ASKED' || previous.answer) continue;
+        if (!previous || previous.version !== (detectedVersions.get(question.id) ?? question.version) || previous.status !== 'ASKED' || previous.answer) continue;
         const grounded = suggestion.sourceIds.every(id => suggestion.quotes.some(quote =>
           quote.sourceId === id && [...input.segments, ...input.context].some(segment => segment.id === id && segment.text.includes(quote.text))
         )) && suggestion.quotes.every(quote => suggestion.sourceIds.includes(quote.sourceId) && [...input.segments, ...input.context].some(segment => segment.id === quote.sourceId && segment.text.includes(quote.text)));
@@ -284,7 +317,7 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
             author: 'brody', at: new Date().toISOString(), reason: suggestion.reason, jobId: job.id },
         ];
         await tx.question.updateMany({
-          where: { id: question.id, meetingId: job.meetingId, version: question.version, status: 'ASKED', answer: '' },
+          where: { id: question.id, meetingId: job.meetingId, version: previous.version, status: 'ASKED', answer: '' },
           data: automatic
             ? { status: 'RESOLVED', answer: suggestion.text, evidenceIds: suggestion.sourceIds,
                 answerSuggestion: Prisma.DbNull, automaticResolution: true, history, version: { increment: 1 } }
