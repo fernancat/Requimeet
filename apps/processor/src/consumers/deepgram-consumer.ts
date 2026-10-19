@@ -43,6 +43,8 @@ interface TrackStream {
   utteranceEndMs: number | null;
   finalChunks: string[];
   lastFrameAtMs: number;
+  lastKeepaliveAtMs: number;
+  finalizeRequested: boolean;
 }
 
 const MODEL = 'nova-2';
@@ -71,7 +73,7 @@ export class DeepgramConsumer implements MediaConsumer {
 
   onSessionStart(session?: { startedAtMs: number }): void {
     this.startedAtMs = session?.startedAtMs ?? Date.now();
-    this.keepalive = setInterval(() => this.pingIdleStreams(), KEEPALIVE_MS);
+    this.keepalive = setInterval(() => this.pingIdleStreams(), 250);
     this.keepalive.unref?.();
   }
 
@@ -98,6 +100,7 @@ export class DeepgramConsumer implements MediaConsumer {
       this.streams.set(sid, stream);
     }
     stream.lastFrameAtMs = Date.now();
+    stream.finalizeRequested = false;
     const bytes = Buffer.from(
       frame.samples.buffer,
       frame.samples.byteOffset,
@@ -136,6 +139,8 @@ export class DeepgramConsumer implements MediaConsumer {
       utteranceEndMs: null,
       finalChunks: [],
       lastFrameAtMs: Date.now(),
+      lastKeepaliveAtMs: Date.now(),
+      finalizeRequested: false,
     };
     socket.on('message', (data) => this.handleMessage(stream, data.toString()));
     socket.on('open', () => {
@@ -182,11 +187,9 @@ export class DeepgramConsumer implements MediaConsumer {
       if (endMs !== null) stream.utteranceEndMs = endMs;
       if (message.is_final) {
         stream.finalChunks.push(text);
-        if (message.speech_final) {
-          this.emitFinal(stream);
-        } else {
-          this.emitPartial(stream, stream.finalChunks.join(' '));
-        }
+        // is_final confirms this segment even if the speaker continues.
+        // Waiting for speech_final can strand confirmed text during WebRTC silence.
+        this.emitFinal(stream);
       } else {
         this.emitPartial(stream, [...stream.finalChunks, text].join(' '));
       }
@@ -273,8 +276,16 @@ export class DeepgramConsumer implements MediaConsumer {
   private pingIdleStreams(): void {
     const now = Date.now();
     for (const stream of this.streams.values()) {
-      if (!stream.closing && (stream.socket.readyState === undefined || stream.socket.readyState === WebSocket.OPEN) && now - stream.lastFrameAtMs >= KEEPALIVE_MS) {
+      if (stream.closing || (stream.socket.readyState !== undefined && stream.socket.readyState !== WebSocket.OPEN)) continue;
+      // DTX/muting may stop PCM packets, so no acoustic silence reaches endpointing.
+      // Ask Deepgram to finalize its buffer; never promote our own interim text.
+      if (stream.lastPartialId && !stream.finalizeRequested && now - stream.lastFrameAtMs >= 600) {
+        stream.socket.send('{"type":"Finalize"}');
+        stream.finalizeRequested = true;
+      }
+      if (now - Math.max(stream.lastFrameAtMs, stream.lastKeepaliveAtMs) >= KEEPALIVE_MS) {
         stream.socket.send('{"type":"KeepAlive"}');
+        stream.lastKeepaliveAtMs = now;
       }
     }
   }

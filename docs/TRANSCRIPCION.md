@@ -95,8 +95,10 @@ wss://api.deepgram.com/v1/listen
     reemplazando. Cada parcial apunta al anterior vía `replacesResultId`.
   - `transcript-final` (`isFinal: true`): frase definitiva; también reemplaza al
     último parcial, de modo que la UI no duplica la frase.
-- Acumula fragmentos `is_final` hasta que Deepgram marca `speech_final`, para
-  emitir la frase completa.
+- Publica cada segmento `is_final` confirmado sin esperar `speech_final`. La IA
+  conserva el contexto entre segmentos. Si dejan de llegar paquetes PCM durante
+  600 ms con texto provisional pendiente, solicita `Finalize` una vez por pausa
+  y espera la confirmación del proveedor; no convierte parciales en finales.
 - KeepAlive: cada 5 s envía `{"type":"KeepAlive"}` en los streams sin audio
   reciente, para que Deepgram no cierre la conexión por inactividad.
 - Cierre: cierra el socket al despublishar la pista (`onTrackUnpublished`) y al
@@ -106,8 +108,8 @@ wss://api.deepgram.com/v1/listen
 
 ### 3.2 `apps/processor/src/deepgram-consumer.spec.ts` (nuevo)
 
-7 pruebas unitarias con un socket falso (sin red): un stream por track,
-reemplazo de parciales por `replacesResultId`, acumulación hasta `speech_final`,
+Pruebas unitarias con un socket falso (sin red): un stream por track,
+reemplazo de parciales por `replacesResultId`, publicación de `is_final` sin esperar `speech_final`, petición de `Finalize` por pausa,
 aislamiento entre participantes, `speech_final` sin texto, cierre en
 `onTrackUnpublished`/`onSessionEnd` y tolerancia a JSON inválido.
 

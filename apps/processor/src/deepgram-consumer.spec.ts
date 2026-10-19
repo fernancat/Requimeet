@@ -121,7 +121,7 @@ describe('DeepgramConsumer', () => {
     });
   });
 
-  it('acumula fragmentos finales hasta speech_final', () => {
+  it('publica cada segmento confirmado sin esperar speech_final', () => {
     const results: ProcessingResult[] = [];
     const consumer = new DeepgramConsumer('m1', 'key', (r) => results.push(r), () => {}, factory);
     consumer.onAudioFrame(audioFrame('p1', 'sid-1'));
@@ -131,10 +131,9 @@ describe('DeepgramConsumer', () => {
     socket.receive(transcriptMessage('prueba dos', { is_final: true, speech_final: true }));
 
     expect(results).toHaveLength(2);
-    expect(results[1]).toMatchObject({
-      kind: 'transcript-final',
-      payload: { text: 'prueba uno prueba dos' },
-    });
+    expect(results[0]).toMatchObject({ kind: 'transcript-final', isFinal: true, payload: { text: 'prueba uno' } });
+    expect(results[1]).toMatchObject({ kind: 'transcript-final', isFinal: true, payload: { text: 'prueba dos' } });
+    expect(results[1].resultId).not.toBe(results[0].resultId);
   });
 
   it('participantes en paralelo no mezclan resultados', () => {
@@ -183,6 +182,28 @@ describe('DeepgramConsumer', () => {
 
     consumer.onSessionEnd();
     expect(sockets[1].closed).toBe(true);
+  });
+
+  it('solicita Finalize al detenerse PCM y espera confirmación sin promover parciales', async () => {
+    jest.useFakeTimers();
+    const results: ProcessingResult[] = [];
+    const consumer = new DeepgramConsumer('m1', 'key', r => results.push(r), () => {}, factory);
+    try {
+      consumer.onSessionStart();
+      consumer.onAudioFrame(audioFrame('p1', 'sid-1'));
+      sockets[0].receive(transcriptMessage('respuesta provisional'));
+      jest.advanceTimersByTime(750);
+      expect(sockets[0].sent.filter(item => item === '{"type":"Finalize"}')).toHaveLength(1);
+      expect(results.every(r => !r.isFinal)).toBe(true);
+      jest.advanceTimersByTime(1000);
+      expect(sockets[0].sent.filter(item => item === '{"type":"Finalize"}')).toHaveLength(1);
+      sockets[0].receive(transcriptMessage('respuesta confirmada', { is_final: true }));
+      expect(results.at(-1)).toMatchObject({ isFinal: true, payload: { text: 'respuesta confirmada' } });
+      consumer.onAudioFrame(audioFrame('p1', 'sid-1'));
+      sockets[0].receive(transcriptMessage('otra respuesta'));
+      jest.advanceTimersByTime(750);
+      expect(sockets[0].sent.filter(item => item === '{"type":"Finalize"}')).toHaveLength(2);
+    } finally { await consumer.onSessionEnd(); jest.useRealTimers(); }
   });
 
   it('json invalido se ignora sin lanzar', () => {
