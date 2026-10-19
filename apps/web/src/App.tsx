@@ -1,3 +1,4 @@
+import ReviewPage from './pages/ReviewPage';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { getHostToken } from './lib/auth';
 import DashboardPage from './pages/DashboardPage';
@@ -29,6 +30,7 @@ export default function App() {
           </RequireHost>
         }
       />
+      <Route path="/meetings/:code/review" element={<RequireHost><ReviewPage /></RequireHost>} />
       <Route path="/m/:code" element={<MeetingEntryPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

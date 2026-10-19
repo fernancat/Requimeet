@@ -316,6 +316,7 @@ export default function MeetingRoomPage({
     <div className="room">
       <header className="room-topbar">
         <span className="brand">RequiMeet · {code}</span>
+        {isHost && <a href={`/meetings/${code}/review`} target="_blank" rel="noreferrer">Revisar levantamiento</a>}
         <div className="topbar-actions">
           <span className={`conn-state ${room.connectionState}`}>{connectionLabel}</span>
           <button className="secondary" onClick={() => void onCopyLink()}>
