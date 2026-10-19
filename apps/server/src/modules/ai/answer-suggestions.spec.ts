@@ -193,4 +193,43 @@ describe('respuestas habladas de Brody', () => {
     expect((await prisma.transcriptSegment.findUniqueOrThrow({ where: { id: segment.id } })).analyzedRevision).toBe(segment.revision);
   });
 
+  it('tolera detectar de nuevo una pregunta ASKED con evidencia válida y procesa su respuesta', async () => {
+    const { meeting, question, segment, caller } = await setup();
+    const spoken = '¿Quién aprueba? Solo los administradores aprueban.';
+    await prisma.transcriptSegment.update({ where: { id: segment.id }, data: { text: spoken } });
+    generate.mockResolvedValue({ requirements: [], questions: [],
+      askedQuestions: [{ questionId: question.id, sourceId: segment.id, quote: '¿Quién aprueba?' }],
+      answerSuggestions: [{ questionId: question.id, text: 'Administradores.', sourceIds: [segment.id], clarity: 'clear',
+        quotes: [{ sourceId: segment.id, text: 'Solo los administradores aprueban.' }] }],
+    });
+    await ai.analyze(meeting.code, caller); await ai.processNext();
+    const saved = await prisma.question.findUniqueOrThrow({ where: { id: question.id } });
+    expect(saved.status).toBe('RESOLVED');
+    expect(saved.version).toBe(question.version + 1);
+  });
+
+  it('reanuda el texto nuevo acumulado cuando un trabajo agota sus reintentos', async () => {
+    const { meeting, segment, caller } = await setup();
+    generate.mockRejectedValue(new Error('Proveedor temporalmente no disponible'));
+    await ai.analyze(meeting.code, caller);
+    await ai.processNext(); await ai.processNext();
+    await prisma.transcriptSegment.create({ data: { meetingId: meeting.id, resultId: 'new-after-failure',
+      participantId: segment.participantId, text: 'Nueva información.', isFinal: true, createdAtMs: Date.now() + 2 } });
+    await ai.processNext();
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    const jobs = await prisma.aiJob.findMany({ where: { meetingId: meeting.id } });
+    expect(jobs.some(job => job.status === 'failed')).toBe(true);
+    expect(jobs.some(job => job.status === 'queued' && (job.input as any).segments.length === 2)).toBe(true);
+  });
+
+  it('ignora respuestas repetidas de preguntas cerradas sin bloquear preguntas nuevas', async () => {
+    const { meeting, question, segment, caller } = await setup();
+    await questions.edit(meeting.code, question.id, caller, { version: question.version, text: question.text, status: 'RESOLVED', answer: 'Decisión humana guardada.', evidenceIds: [] });
+    generate.mockResolvedValue({ ...output(question.id, segment.id), questions: [{ text: '¿Cómo se registran las aprobaciones?', category: 'missing', priority: 'MEDIUM', reason: 'Falta el registro.', sourceIds: [segment.id] }] });
+    const { job } = await ai.analyze(meeting.code, caller); await ai.processNext();
+    expect((await prisma.question.findUniqueOrThrow({ where: { id: question.id } })).answer).toBe('Decisión humana guardada.');
+    expect(await prisma.question.count({ where: { meetingId: meeting.id } })).toBe(2);
+    expect((await prisma.aiJob.findUniqueOrThrow({ where: { id: job!.id } })).status).toBe('completed');
+  });
+
 });

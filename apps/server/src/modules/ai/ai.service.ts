@@ -250,6 +250,7 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
           },
         });
       }
+      if (job.kind === 'analysis' && job.attempts >= 2) this.schedule({ meetingId: job.meetingId });
       await this.notify(job.meetingId);
     } finally {
       this.running = false;
@@ -275,6 +276,16 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
     return result;
   }
   private async persistAnalysis(job: AiJob, input: AnalysisInput, result: ReturnType<typeof analysisSchema.parse>, final: boolean) {
+    // Ignore redundant proposals for closed questions without changing human decisions.
+    // Unknown IDs still reach validation and fail; only known inactive questions are skipped.
+    const activeQuestion = (id: string) => {
+      const question = input.questions.find(q => q.id === id);
+      return !question || ['PENDING', 'ASKED'].includes(question.status);
+    };
+    result = { ...result,
+      askedQuestions: result.askedQuestions.filter(item => activeQuestion(item.questionId)),
+      answerSuggestions: result.answerSuggestions.filter(item => activeQuestion(item.questionId)),
+    };
     const allowed = new Set(
       [...input.segments, ...input.context].map((s) => s.id),
     );
@@ -285,10 +296,11 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
     for (const asked of result.askedQuestions) {
       const question = input.questions.find(q => q.id === asked.questionId);
       const source = allSegments.find(s => s.id === asked.sourceId);
-      if (!question || question.status !== 'PENDING' || !question.eligibleSourceIds.includes(asked.sourceId) ||
+      if (!question || !['PENDING', 'ASKED'].includes(question.status) || !question.eligibleSourceIds.includes(asked.sourceId) ||
           !source || source.speakerRole !== 'host' || !source.text.includes(asked.quote) || !Number.isFinite(source.createdAtMs))
         throw new Error('Detección de pregunta sin evidencia válida del anfitrión');
-      detections.set(question.id, { sourceId: source.id, quote: asked.quote, at: source.createdAtMs! });
+      // Repeated recognition of an already asked question is an idempotent no-op.
+      if (question.status === 'PENDING') detections.set(question.id, { sourceId: source.id, quote: asked.quote, at: source.createdAtMs! });
     }
     for (const suggestion of result.answerSuggestions) {
       const question = input.questions.find(q => q.id === suggestion.questionId);
