@@ -69,6 +69,7 @@ export class MeetingsService {
         code: updated.code,
         hostId: updated.hostId,
         status: 'active',
+        startedAtMs: updated.startedAt?.getTime(),
       });
       return this.toSummary(updated);
     }
@@ -260,7 +261,8 @@ export class MeetingsService {
     });
 
     if (!updated) {
-      return this.toJoinRequestDto(request);
+      const current = await this.prisma.joinRequest.findUniqueOrThrow({ where: { id: request.id } });
+      return this.toJoinRequestDto(current);
     }
     this.logger.log(`reunion ${meeting.code}: solicitud ${updated.id} -> ${updated.status}`);
     this.events.emit(DOMAIN_EVENTS.joinRequestDecided, {

@@ -84,7 +84,7 @@ export class MediaSession {
   async start(): Promise<void> {
     this.pipelines.forEach((p) => p.start());
     this.dispatchEvent((c) =>
-      c.onSessionStart?.({ meetingId: this.meetingId, startedAtMs: this.startedAtMs }),
+      c.onSessionStart?.({ meetingId: this.meetingId, startedAtMs: this.request.startedAtMs ?? this.startedAtMs }),
     );
 
     const room = this.roomFactory();

@@ -118,6 +118,7 @@ export interface ProcessingResult {
 
 /** Peticion del backend al processor para iniciar procesamiento. */
 export interface StartProcessingRequest {
+  startedAtMs?: number;
   meetingId: string;
   /** Nombre de la sala en LiveKit (= meeting code). */
   roomName: string;

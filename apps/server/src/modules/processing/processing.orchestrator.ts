@@ -63,6 +63,7 @@ export class ProcessingOrchestrator {
     });
     const request: StartProcessingRequest = {
       meetingId: payload.meetingId,
+      startedAtMs: payload.startedAtMs,
       roomName: payload.code,
       livekitUrl: this.livekitUrl,
       processorToken: await token.toJwt(),

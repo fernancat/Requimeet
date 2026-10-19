@@ -11,6 +11,7 @@ export const DOMAIN_EVENTS = {
 } as const;
 
 export interface MeetingLifecyclePayload {
+  startedAtMs?: number;
   meetingId: string;
   code: string;
   hostId: string;
