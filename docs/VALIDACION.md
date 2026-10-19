@@ -130,3 +130,47 @@ reales de reuniones. Los scripts reproducibles están documentados en INTEGRACIO
   fragmentos y reintento tras corte sin duplicación de historial.
 - Esta comprobación no sustituye una medición de extremo a extremo con micrófono.
 - Suite completa del servidor: 18 suites y 85 tests aprobados; build correcto.
+
+## Flujo real de audio a siguiente pregunta (19 octubre 2026)
+
+Se usó Chromium con un MediaStream de Web Audio como micrófono, voz sintética en
+español, LiveKit Cloud, processor, Deepgram y OpenRouter reales. No se inyectaron
+transcripciones ni se pulsaron botones para marcar preguntas/respuestas/analizar.
+Un MutationObserver registró cuándo cambió la pregunta en el DOM. La prueba es de
+un solo anfitrión que formula la pregunta y responde; no mide micrófono físico,
+ruido, eco, interrupciones entre participantes ni una distribución estadística.
+
+La primera ejecución quedó bloqueada 90 segundos sin trabajos IA: había texto
+parcial sin cierre. Se corrigió publicación de is_final y Finalize durante ausencia
+de PCM. Otras repeticiones revelaron rechazo del lote por detecciones repetidas y
+propuestas para preguntas inactivas; se añadieron tolerancia idempotente y pruebas.
+Una repetición intermedia resolvió ambas preguntas pero no mostró la siguiente;
+estos intentos fallidos no se incluyen como muestras exitosas.
+
+Última ejecución del harness, con las correcciones y cierre completo:
+
+| Turno | Duración del audio | Fin del audio → siguiente pregunta visible | Inicio del audio → siguiente pregunta |
+|---|---:|---:|---:|
+| Empresa y recepción de pedidos | 12,936 s | 8,822 s | 21,762 s |
+| Flujo de vendedor/bodega y falta de existencias | 14,808 s | 0,360 s | 15,175 s |
+
+El análisis comienza sobre segmentos confirmados mientras continúa la voz, de ahí
+la espera breve tras el segundo audio. En una ejecución anterior los intervalos
+tras el audio fueron 3,937 y 0,654 segundos: la variación es importante y no se
+garantiza un tiempo fijo. La medida usa el final del archivo reproducido, que puede
+incluir una pequeña cola de silencio, y el cambio de DOM, no un fotograma de pantalla.
+
+Se verificaron dos resoluciones automáticas, siete segmentos confirmados con
+analyzedRevision igual a revision y siete trabajos completos sin errores. El hilo
+fue empresa → gestión de pedidos → coordinación entre vendedor y bodega. La última
+frase sobre falta de existencias quedó transcrita y analizada; no toda afirmación
+se convierte en requerimiento ni en la siguiente pregunta. La respuesta de proceso
+guardada resume revisión/factura; el despacho posterior queda en transcripción y
+requerimientos, sin reescribir retroactivamente esa respuesta.
+
+Validación automatizada: 88 tests servidor y 21 processor aprobados; builds de
+ambos correctos. Nuevos casos: is_final independiente de speech_final, solicitud
+Finalize sin promover parciales, detección repetida, protección de respuesta humana
+cerrada y continuidad de texto acumulado tras agotar reintentos.
+Harness reproducible: scripts/verify-brody-voice.cjs (requiere audio WAV y servicios
+reales; puede generar consumo de proveedores).

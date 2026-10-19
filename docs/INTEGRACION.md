@@ -170,3 +170,15 @@ análisis puede seguir activo mientras concluye el resto del lote. Ante un corte
 las respuestas ya guardadas se conservan y el trabajo se reintenta sin duplicarlas.
 El protocolo del proveedor está documentado en
 https://openrouter.ai/docs/api-reference/streaming.
+
+Prueba integral de voz: `node scripts/verify-brody-voice.cjs <carpeta-audios> <carpeta-resultados>`.
+Requiere servicios locales activos y proveedores reales configurados. Usa
+`round1.wav` con la apertura y una respuesta de empresa; al imprimir la siguiente
+pregunta permite hasta 150 segundos para colocar `round2.wav` con esa pregunta
+(parafraseada si se desea) y su respuesta. No pulsa botones de avance. Chromium
+puede seleccionarse mediante `PLAYWRIGHT_EXECUTABLE_PATH`.
+El audio entra como MediaStream del micrófono en el navegador y cruza LiveKit,
+processor, Deepgram, persistencia, OpenRouter y Socket.IO hasta el DOM. La prueba
+crea una cuenta/reunión aislada, espera que los finales queden analizados, guarda
+capturas e informe sin tokens y termina la reunión. Los archivos contienen solo
+los datos de la conversación de prueba. No mide micrófono físico, ruido ni eco.

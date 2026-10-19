@@ -227,3 +227,25 @@ fragmento. El control de versión impide duplicar respuestas o sobrescribir camb
 humanos. Un corte conserva unidades ya guardadas y reintenta el trabajo; solamente
 el resultado final válido marca los segmentos como analizados. No se añaden
 llamadas paralelas ni se cambia el modelo.
+
+## Pausas de audio y continuidad entre lotes
+
+Deepgram confirma segmentos con `is_final`; el processor los publica inmediatamente
+y no espera al marcador de fin de intervención `speech_final`. Cuando WebRTC
+deja de entregar PCM (silencio/DTX/mute), el monitor revisa cada 250 ms si hay un
+parcial pendiente y 600 ms sin paquetes. Solicita `Finalize` una sola vez por pausa;
+solo la respuesta confirmada del proveedor puede alimentar la IA. KeepAlive sigue
+limitado a una vez cada cinco segundos sin audio.
+
+Una detección repetida de una pregunta ASKED es una operación sin cambios si la
+fuente, participante anfitrión y cita son válidos. No descarta las respuestas del
+lote ni modifica la versión. Al agotar reintentos, se vuelve a comprobar el texto
+acumulado; el fingerprint evita reencolar indefinidamente el mismo input fallido.
+
+Referencias:
+https://developers.deepgram.com/docs/understand-endpointing-interim-results
+https://developers.deepgram.com/docs/finalize
+
+Las propuestas repetidas para preguntas RESOLVED/DISCARDED conocidas se ignoran
+antes de persistir: no reabren respuestas ni bloquean las preguntas nuevas del
+lote. IDs desconocidos y evidencia inválida en preguntas activas siguen rechazados.
