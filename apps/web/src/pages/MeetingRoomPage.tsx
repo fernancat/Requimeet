@@ -1,3 +1,4 @@
+import QuestionsPanel from '../features/workspace/QuestionsPanel';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Track } from 'livekit-client';
@@ -37,7 +38,8 @@ type Panel =
   | 'participants'
   | 'chat'
   | 'transcript'
-  | 'requirements';
+  | 'requirements'
+  | 'questions';
 
 interface SubscribeAck {
   ok: boolean;
@@ -413,6 +415,7 @@ export default function MeetingRoomPage({
           <TranscriptPanel segments={transcript} participants={participants} />
         )}
 
+        {panel === 'questions' && token && <QuestionsPanel code={code} token={token} canEdit={isHost} refreshVersion={requirementsVersion} />}
         {panel === 'requirements' && token && (
           <RequirementsPanel
             key={code}
@@ -463,6 +466,7 @@ export default function MeetingRoomPage({
         >
           Requerimientos
         </button>
+        <button className={panel === 'questions' ? '' : 'secondary'} onClick={() => togglePanel('questions')}>Preguntas IA</button>
         {isHost &&
           (confirmEnd ? (
             <button className="danger" onClick={() => void onEndMeeting()}>
