@@ -242,9 +242,7 @@ async function api(path, token, body) {
     await page.screenshot({
       path: `/tmp/requimeet-browser-qa/room-${width}.png`,
     });
-    await page
-      .getByRole('button', { name: 'Preguntas IA', exact: true })
-      .click();
+    await page.getByRole('combobox', { name: 'Revisión detallada' }).selectOption('questions');
     await page.locator('.workspace-item').first().waitFor();
     checks.push({
       width,
@@ -258,7 +256,7 @@ async function api(path, token, body) {
     await page.screenshot({
       path: `/tmp/requimeet-browser-qa/panel-${width}.png`,
     });
-    await page.getByRole('button', { name: 'Cerrar panel' }).click();
+    await page.getByRole('button', { name: 'Volver a Brody' }).click();
   }
   await page.setViewportSize({ width: 1366, height: 900 });
   await page.setViewportSize({ width: 683, height: 450 });

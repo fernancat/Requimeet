@@ -1,4 +1,5 @@
 import { confirmLeaving } from '../features/workspace/useResource';
+import BrodyAssistant from '../features/brody/BrodyAssistant';
 import QuestionsPanel from '../features/workspace/QuestionsPanel';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -35,6 +36,7 @@ import {
 import RequirementsPanel from '../features/requirements/RequirementsPanel';
 
 type Panel =
+  | 'brody'
   | 'none'
   | 'participants'
   | 'chat'
@@ -72,7 +74,7 @@ export default function MeetingRoomPage({
   const [exitReason, setExitReason] = useState<ExitReason | null>(null);
   const [socket, setSocket] = useState<Socket | null>(null);
   const [participants, setParticipants] = useState<ParticipantDto[]>([]);
-  const [panel, setPanel] = useState<Panel>('none');
+  const [panel, setPanel] = useState<Panel>('brody');
   const [visited, setVisited] = useState<Set<Panel>>(new Set());
   const [chatInput, setChatInput] = useState('');
   const [shareNotice, setShareNotice] = useState<string | null>(null);
@@ -121,6 +123,7 @@ export default function MeetingRoomPage({
         } while (cursor);
     };
     s.on('connect', () => {
+      setRequirementsVersion(n => n + 1);
       void loadHistory().catch(() => setToast('No se pudo recuperar el historial de transcripción'));
 
       s.emit(RT_EVENTS.clientJoinMeetingChannel, { code }, (ack: SubscribeAck) => {
@@ -338,9 +341,10 @@ export default function MeetingRoomPage({
       )}
 
       <nav className="room-tools" aria-label="Herramientas de la reunión">
-        {(['participants','chat','transcript','requirements','questions'] as const).map(tool => <button key={tool} className={panel === tool ? '' : 'secondary'} aria-pressed={panel === tool} onClick={() => togglePanel(tool)}>{{ participants: 'Participantes', chat: 'Chat', transcript: 'Transcripción', requirements: 'Requerimientos', questions: 'Preguntas IA' }[tool]}{tool === 'chat' && chat.unread > 0 ? ` (${chat.unread})` : tool === 'participants' && joinRequests.pending.length > 0 ? ` (${joinRequests.pending.length})` : ''}</button>)}
+        {(['brody', 'participants', 'chat'] as const).map(tool => <button key={tool} className={panel === tool ? '' : 'secondary'} aria-pressed={panel === tool} onClick={() => togglePanel(tool)}>{{ brody: 'Brody · En vivo', participants: 'Participantes', chat: 'Chat' }[tool]}{tool === 'chat' && chat.unread > 0 ? ` (${chat.unread})` : tool === 'participants' && joinRequests.pending.length > 0 ? ` (${joinRequests.pending.length})` : ''}</button>)}
+        <label className="room-detail-picker"><span className="sr-only">Revisión detallada</span><select aria-label="Revisión detallada" value={['transcript','requirements','questions'].includes(panel) ? panel : ''} onChange={e => { if (e.target.value) togglePanel(e.target.value as Panel); }}><option value="">Revisión detallada</option><option value="transcript">Transcripción</option><option value="requirements">Requerimientos</option><option value="questions">Todas las preguntas</option></select></label>
       </nav>
-      <main className={`room-main ${hasScreenShare ? 'with-share' : ''} ${panel !== 'none' ? 'has-panel' : ''}`}>
+      <main className={`room-main ${hasScreenShare ? 'with-share' : ''} ${panel !== 'none' ? 'has-panel' : ''} ${panel === 'brody' ? 'with-brody' : ''}`}>
         <div className="media-stage">
         {hasScreenShare && room.room && (
           <div className="share-area">
@@ -384,7 +388,8 @@ export default function MeetingRoomPage({
         </div>
         </div>
         <aside className="room-sidebar" hidden={panel === 'none'} aria-label="Panel de trabajo">
-        <button className="secondary panel-close" onClick={() => setPanel('none')}>Cerrar panel</button>
+        <button className="secondary panel-close" onClick={() => setPanel(panel === 'brody' ? 'none' : 'brody')}>{panel === 'brody' ? 'Minimizar Brody' : 'Volver a Brody'}</button>
+        <div className="panel-content" hidden={panel !== 'brody'}>{token && <BrodyAssistant code={code} token={token} canEdit={isHost} refreshVersion={requirementsVersion} connected={room.connectionState === 'connected'} interrupted={lastResult?.payload.processingStatus === 'interrupted'} transcriptText={transcript[transcript.length - 1]?.text} />}</div>
         {panel === 'participants' && (
           <div className="side-panel-stack">
             {isHost && (

@@ -128,3 +128,23 @@ Los editores visitados permanecen montados al cambiar de panel.
   revalidación reducen la ventana. Rate limiting en memoria es protección básica.
 - Una presentación activa a la vez se controla en el cliente; el audio del sistema
   depende de soporte del navegador. No se puede encender micrófono/cámara ajenos.
+
+### Brody: acompañamiento durante la reunión
+
+La sala abre `BrodyAssistant` como flujo principal. Consume preguntas, requerimientos
+y estados de análisis ya persistidos; `workspace:changed` y la reconexión disparan
+recuperación REST, con consulta periódica como respaldo. No agrega llamadas al
+modelo por cada render ni procesa texto parcial. La pregunta actual permanece
+estable ante sugerencias nuevas; se continúa con preguntas realizadas y luego por
+prioridad. «Después» aplaza localmente sin descartar la pregunta en la base.
+
+Las respuestas, descartes y aprobaciones usan los contratos existentes con versión
+esperada y autorización del servidor. Los borradores permanecen al cambiar de panel;
+un conflicto muestra el error y conserva la respuesta local. Brody no infiere una
+aprobación ni resuelve preguntas automáticamente. Los editores completos siguen en
+«Revisión detallada» y en la revisión posterior.
+
+El avatar carga Three.js de forma diferida y un GLB local CC0 de Quaternius (404 KB).
+Usa la animación Idle, respeta movimiento reducido, evita renderizar fuera de vista
+y libera los recursos al desmontarse. Si WebGL falla, el flujo textual sigue usable.
+La licencia y procedencia están en `apps/web/public/models/brody/LICENSE.txt`.

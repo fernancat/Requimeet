@@ -847,3 +847,67 @@ legend { padding: 0 8px; font-weight: 600; }
  fieldset { padding: 12px; }
 }
 @media (prefers-reduced-motion: reduce) { .lobby-spinner { animation: none; border-color: var(--accent); } }
+
+/* Brody is the default conversation companion; editors remain secondary. */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.room-detail-picker { margin: 0 0 0 auto; min-width: 170px; }
+.room-detail-picker select { margin: 0; height: 44px; }
+.brody-assistant { width: 100%; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.brody-heading { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 0 8px; }
+.brody-heading h2 { font-size: 22px; margin: 0 0 4px; }
+.brody-heading span { font-size: 12px; color: var(--text-dim); }
+.brody-heading .brody-live { color: var(--success); }
+.brody-conversation { display: flex; flex-direction: column; align-items: flex-start; flex-shrink: 0; padding: 0 8px 12px; }
+.brody-avatar { width: 144px; height: 130px; align-self: center; overflow: hidden; }
+.brody-avatar canvas { display: block; }
+.brody-avatar-fallback { display: block; padding-top: 50px; text-align: center; color: var(--success); }
+.brody-bubble { background: #dcebdc; color: #203a2b; padding: 16px; border-radius: 14px; position: relative; width: 100%; overflow-wrap: anywhere; max-height: 190px; overflow: auto; }
+.brody-bubble h3 { font-size: 13px; font-weight: 600; margin: 0 0 8px; color: #35583e; }
+.brody-bubble p { margin: 0; line-height: 1.5; }
+.brody-bubble .brody-question { font-size: 18px; line-height: 1.4; }
+.brody-scroll { overflow-y: auto; min-height: 0; padding: 4px 8px 18px; }
+.brody-scroll p { line-height: 1.5; overflow-wrap: anywhere; }
+.brody-scroll summary { cursor: pointer; color: var(--text-dim); padding: 8px 0; font-size: 13px; }
+.brody-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 16px; }
+.brody-actions button { padding: 8px 10px; }
+.brody-next label { font-size: 13px; }
+.brody-next textarea { margin: 6px 0 10px; resize: vertical; min-height: 70px; }
+.brody-next > button { width: 100%; }
+.brody-queue { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 16px 0; font-size: 13px; color: var(--text-dim); border-bottom: 1px solid var(--border); }
+.brody-detections h3 { font-size: 16px; margin: 24px 0 8px; }
+.brody-count, .brody-disclaimer { font-size: 12px; color: var(--text-dim); }
+.brody-detections article { padding: 16px 0; border-bottom: 1px solid var(--border); }
+.brody-requirement-status { font-size: 12px; color: var(--success); }
+.brody-detections article p { margin: 8px 0 12px; }
+.brody-notice { color: var(--success); font-size: 13px; }
+.brody-disclaimer { display: block; margin-top: 18px; line-height: 1.5; }
+.brody-transcript { margin: 14px 0; }
+@media (max-width: 900px) {
+ .room-main.with-brody { grid-template-rows: minmax(100px, 1fr) minmax(0, 1.4fr); gap: 8px; }
+ .room-main.with-brody .room-sidebar { position: static; border: 0; }
+ .with-brody .brody-conversation { flex-direction: row; gap: 8px; align-items: center; padding-top: 6px; }
+ .with-brody .brody-avatar { width: 80px; height: 100px; flex: 0 0 80px; }
+ .with-brody .brody-avatar canvas { width: 100px !important; height: 100px !important; margin-left: -10px; }
+ .with-brody .brody-bubble { max-height: 130px; padding: 10px; }
+ .with-brody .brody-bubble .brody-question { font-size: 15px; }
+ .with-brody .panel-close { font-size: 12px; min-height: 30px; padding: 4px 8px; }
+ .with-brody .brody-heading h2 { font-size: 17px; }
+ .room-tools { flex-wrap: wrap; overflow: visible; }
+ .room-detail-picker { flex: 1; min-width: 140px; }
+}
+@media (max-height: 700px) {
+ .brody-avatar { height: 75px; }
+ .brody-avatar canvas { width: 100px !important; height: 100px !important; margin: -10px auto 0; }
+ .brody-bubble { max-height: 110px; padding: 10px; }
+}
+.brody-detection-alert { margin: 0 8px 8px; flex-shrink: 0; text-align: left; color: var(--success); font-size: 12px; }
+.brody-conversation { position: relative; }
+.brody-conversation::after { content: ''; position: absolute; top: 120px; left: 50%; width: 14px; height: 14px; background: #dcebdc; transform: rotate(45deg); }
+@media (max-width: 900px) {
+ .with-brody .brody-assistant { overflow-y: auto; }
+ .with-brody .brody-heading { flex-shrink: 0; }
+ .with-brody .brody-scroll { overflow: visible; flex-shrink: 0; }
+ .with-brody .brody-conversation::after { top: 48px; left: 82px; }
+ .with-brody .brody-bubble { max-height: none; }
+}
+@media (min-width: 901px) and (max-height: 700px) { .brody-conversation::after { top: 65px; } }

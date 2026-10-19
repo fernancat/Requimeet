@@ -9,6 +9,8 @@ const { disconnectMock, connectMock } = vi.hoisted(() => ({
   connectMock: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock('../features/brody/BrodyAvatar', () => ({ default: () => null }));
+
 vi.mock('livekit-client', () => {
   class FakeRoom {
     state = 'connected';
@@ -64,6 +66,8 @@ vi.mock('../lib/api', () => ({
     if (path.includes('media-token')) {
       return Promise.resolve({ token: 'lk-token', livekitUrl: 'ws://x', expiresInSec: 300 });
     }
+    if (path.includes('analysis')) return Promise.resolve({ enabled: true, model: 'deepseek/deepseek-v4-flash', jobs: [] });
+    if (path.includes('questions') || path.includes('requirements')) return Promise.resolve([]);
     if (path.includes('messages')) {
       return Promise.resolve([]);
     }

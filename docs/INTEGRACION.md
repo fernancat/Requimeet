@@ -102,3 +102,21 @@ La integración automatizada cubre finalización, duplicados, revisiones atrasad
 permisos, reapertura, evidencia obligatoria, validación IA, generación, conflictos,
 fuentes desactualizadas y formatos exportados. Los proveedores reales se verifican
 por separado con una llamada mínima y audio sintético, sin contenido de reuniones.
+
+### Probar Brody en vivo
+
+Al entrar a una reunión, «Brody · En vivo» se abre automáticamente. Hablar con el
+micrófono activo produce segmentos finales y alimenta el análisis incremental
+existente. Al llegar preguntas, el globo propone una por vez. «Ya la pregunté»
+registra ASKED; «Guardar respuesta y continuar» registra RESOLVED con la respuesta;
+«Después» conserva la pregunta pendiente para retomarla durante esa sesión.
+Los requerimientos aparecen en el mismo flujo y se aprueban explícitamente.
+
+La animación es visual, sin síntesis de voz ni captura adicional de micrófono.
+Los invitados consultan sin controles de escritura. En móvil, el escenario y el
+asistente comparten el espacio vertical; el asistente tiene desplazamiento propio
+y puede minimizarse. La revisión completa se conserva en el selector secundario.
+
+No requiere migraciones ni variables nuevas. El modelo Dino de Quaternius es CC0:
+https://poly.pizza/m/wuerCFCWNR. Se sirve localmente y no llama a servicios de assets
+durante una reunión. El chunk 3D se carga por separado del frontend principal.

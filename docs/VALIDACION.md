@@ -39,3 +39,20 @@ Verificación realizada el 19 de octubre de 2026 sobre la implementación integr
 
 Las bases `requimeet_test` y `requimeet_qa` son de verificación y no contienen datos
 reales de reuniones. Los scripts reproducibles están documentados en INTEGRACION.md.
+
+## Brody: asistente de reunión (19 de octubre de 2026)
+
+- Frontend: 50 tests pasan; build TypeScript/Vite correcto. Los 7 tests nuevos cubren
+  selección estable, prioridades, aplazamiento, borradores ante actualizaciones,
+  conflictos de edición y consulta de invitados.
+- Chromium con LiveKit Cloud y preguntas sintéticas en una reunión diagnóstica:
+  pregunta realizada, respuesta persistida por REST, avance a la siguiente pregunta
+  y conservación del borrador al cambiar al chat y volver.
+- Pantalla compartida sintética con Brody a 360, 768, 1366 y 1920px: presentación
+  visible, respuesta accesible mediante desplazamiento y sin overflow horizontal.
+- Capturas de escritorio y móvil inspeccionadas: GLB local renderizado, globo de
+  texto legible y controles accesibles. Sin errores JavaScript en el flujo probado.
+- Se conserva el aviso de tamaño de chunks de Vite; Three.js carga diferido.
+- Esta verificación no vuelve a medir latencia de proveedores ni reconocimiento
+  de voz: reutiliza el procesamiento incremental ya verificado. Brody no habla
+  por audio ni deduce respuestas automáticamente.
