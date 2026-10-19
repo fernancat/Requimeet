@@ -11,7 +11,7 @@ export class OpenRouterService {
       Boolean(this.config.get<string>('OPENROUTER_API_KEY'))
     );
   }
-  async generate(instruction: string, input: unknown): Promise<unknown> {
+  async generate(instruction: string, input: unknown, options: { live?: boolean } = {}): Promise<unknown> {
     const key = this.config.get<string>('OPENROUTER_API_KEY');
     if (!key)
       throw new ServiceUnavailableException(
@@ -40,7 +40,8 @@ export class OpenRouterService {
       body: JSON.stringify({
         model: this.model,
         temperature: 0.2,
-        max_tokens: 7000,
+        max_tokens: options.live ? 3000 : 7000,
+        ...(options.live ? { reasoning: { effort: 'none' } } : {}),
         response_format: { type: 'json_object' },
         messages: [
           {
