@@ -2,10 +2,10 @@
 
 Videollamadas grupales orientadas al levantamiento de requerimientos de
 software. Core de reuniones con un punto de extensión real de procesamiento
-multimedia para módulos futuros (transcripción, preguntas IA, requerimientos).
+multimedia, transcripción, preguntas IA, requerimientos y documentos revisables.
 
 Diseño y decisiones: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-Cómo integrar módulos futuros: [docs/INTEGRACION.md](docs/INTEGRACION.md).
+Configuración e integración: [docs/INTEGRACION.md](docs/INTEGRACION.md).
 
 ## Stack
 
@@ -80,3 +80,7 @@ apps/processor   consumidor de pistas LiveKit (proceso separado, mismo repo)
 packages/contracts  tipos compartidos (API, eventos RT, contrato multimedia)
 scripts/e2e-smoke.mjs  prueba E2E integral scriptada
 ```
+
+## Levantamiento completo
+
+La sala incluye transcripción persistente, revisión de requerimientos y preguntas IA. Desde **Revisar levantamiento** o el dashboard se gestionan entidades, relaciones y documento final con exportación PDF/Word. Consulta [arquitectura](docs/ARCHITECTURE.md) y [configuración, API y pruebas](docs/INTEGRACION.md).

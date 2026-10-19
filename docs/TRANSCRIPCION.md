@@ -1,3 +1,8 @@
+> Nota de versión: este documento describe la implementación original de la rama 19.
+> Desde la rama 20 hay persistencia, IDs estables con revisiones, recuperación REST,
+> buffers de apertura y cierre coordinado. La arquitectura vigente y sus límites
+> se documentan en [ARCHITECTURE.md](ARCHITECTURE.md) e [INTEGRACION.md](INTEGRACION.md).
+
 # Transcripción en vivo con Deepgram
 
 Documento técnico de los cambios realizados en RequiMeet para incorporar

@@ -1,62 +1,104 @@
-# RequiMeet — Integración de módulos futuros
+# RequiMeet — Integración y verificación
 
-Punto de extensión real del proyecto: el pipeline multimedia del processor.
-Este documento indica **dónde** conectar cada módulo futuro y **con qué
-contrato**, sin tocar el core de reuniones.
+## Base y ramas
 
-## Tabla de puntos de extensión
+La base integrada es `53f2c49` (Cristina), `feat/alba-requerimientos`, que contiene
+la transcripción de `feat/19-transcripcion-deepgram`. Se conserva su historial.
+Las ramas 20–27 apilan transcripción, requerimientos, IA, preguntas, entidades,
+documento, exportación y sala responsive. La rama 28 reúne correcciones encontradas
+en la validación integral. Los commits nuevos usan `feat:` sin coautoría adicional.
 
-| Módulo futuro | Punto de extensión | Contrato |
-|---|---|---|
-| Transcripción (Deepgram) | Nuevo `MediaConsumer` en `apps/processor/src/consumers/`, registrado en `apps/processor/src/main.ts` (`sessionFactory`) | `AudioFrame` (PCM16, 48kHz) de `packages/contracts/src/media.ts`; resultados `kind: 'transcript-partial' \| 'transcript-final'` con `resultId`/`replacesResultId` |
-| Preguntas IA | Consumir los resultados en el server (listener `@OnEvent('livekit.event')` no aplica; suscribirse al flujo de `InternalProcessingController` o persistir resultados y consultarlos) | `ProcessingResult` de `media.ts`; evento RT `processing:result` |
-| Requerimientos / minutas | Igual que preguntas IA: agregación de `transcript-final` por reunión | `ProcessingResult.payload` + `Meeting`/`Participant` en PostgreSQL |
-| Diagramas / exportación | Lectura de PostgreSQL (reuniones, participantes, chat) + resultados persistidos si se decide | Tablas Prisma (`apps/server/prisma/schema.prisma`) |
+## Preparación
 
-## Cómo añadir un consumidor (ej. transcripción)
+```sh
+npm ci
+npm run prisma:generate -w apps/server
+npm run prisma:deploy -w apps/server
+npm run build
+```
 
-1. Crear `apps/processor/src/consumers/deepgram-consumer.ts` implementando
-   `MediaConsumer` (`packages/contracts/src/media.ts`):
-   - `onAudioFrame(frame)`: enviar PCM16 al stream de Deepgram.
-   - Publicar resultados con `kind: 'transcript-partial'` (parciales,
-     `isFinal: false`) y luego `transcript-final` (`isFinal: true`,
-     `replacesResultId` apuntando al parcial que corrige — la UI reemplaza sin
-     duplicar la frase).
-2. Registrarlo en `apps/processor/src/main.ts` dentro de `sessionFactory`,
-   junto al `DemoConsumer`.
-3. El resultado viaja solo: processor → `POST /api/internal/processing/results`
-   (con `x-internal-secret`) → server retransmite `processing:result` por
-   Socket.IO a `meeting:<code>` → la UI lo muestra.
+Prisma lee `apps/server/.env`. Utilizar una base PostgreSQL disponible y aplicar
+las migraciones antes de iniciar. Las migraciones nuevas son aditivas y conservan
+transcripciones/requerimientos anteriores. npm es el único gestor; no hay lockfile pnpm.
 
-El processor ya garantiza: buffers acotados con drop-oldest (50 frames),
-aislamiento de errores por consumidor (una excepción no tumba la sesión),
-reconexión sin consumidores duplicados (keyed por `trackSid`) y reintentos
-con backoff al publicar resultados.
+Configurar `OPENROUTER_API_KEY` solo en `apps/server/.env` y `DEEPGRAM_API_KEY`
+solo en `apps/processor/.env`. Los ejemplos contienen nombres, nunca credenciales.
+El processor también carga `.env` raíz y después su configuración local.
 
-## Reglas del contrato que hay que respetar
+```sh
+npm run dev:server
+npm run dev:processor
+npm run dev:web
+```
 
-- `mediaTimeMs` es tiempo del medio acumulado por pista; `receivedAtMs` es
-  hora local. **No** hay sincronización exacta entre participantes: alinear
-  pistas para análisis cruzado requiere sincronización aparte.
-- Identidad: `ParticipantRef.participantId` es el `Participant.id` interno
-  (estable); `livekitIdentity` solo correlaciona con LiveKit.
-- Nada de audio/video se persiste por defecto; no loguear frames (solo
-  contadores e ids).
-- Los resultados son prescindibles por diseño (drop con log tras 3 intentos);
-  si un módulo necesita durabilidad, debe persistirlos explícitamente en el
-  server.
+Mantener consistentes `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` y
+`VITE_LIVEKIT_URL`: no mezclar credenciales locales con una URL LiveKit Cloud.
+El frontend usa proxy de Vite si `VITE_SERVER_URL` está vacío. Para PDF el paquete
+servidor debe incluir `assets/fonts` además de `dist` y dependencias.
 
-## Transcripción persistente (20)
-Los resultados usan resultId estable y revision incremental. TranscriptsService guarda parciales y finales; solo los finales emiten transcript.confirmed. GET /meetings/:code/transcripts recupera páginas de 100 segmentos. El propietario puede corregir finales con PATCH y versión esperada. Se conserva original e historial. El cierre espera al processor hasta 15 segundos antes de borrar la sala; resultados tardíos se aceptan durante 30 segundos desde endedAt. El buffer de audio es acotado: una caída prolongada puede dejar fragmentos incompletos, nunca se presentan como confirmados.
+## Contratos de extensión
 
-## IA incremental (22)
-AiModule escucha transcript.confirmed con agrupación de 1.5 segundos. PostgreSQL conserva AiJob y analyzedRevision; el worker de un único servidor toma trabajos cada 2 segundos, sin llamadas LLM en el ingreso multimedia. Reinicios recuperan trabajos pendientes, máximo tres intentos y timeout de 45 segundos por generación. La configuración verifica el ID exacto deepseek/deepseek-v4-flash en OpenRouter. Las respuestas JSON se validan y solo aceptan fuentes de la reunión; ninguna propuesta sobrescribe texto humano. No ejecutar múltiples instancias del worker sin implementar leases distribuidos.
+- `MediaConsumer`: recibe frames y eventos. El procesamiento continúa si falla
+  un consumidor. Audio/video no se almacena ni se imprime en logs.
+- `ProcessingResult`: `resultId`, `revision`, `meetingId`, `participantId`,
+  `trackSid`, `kind`, `isFinal`, `createdAtMs`, `payload`. Los tiempos se expresan
+  en milisegundos y se conserva tiempo de pista separado.
+- `TranscriptsService`: persiste y corrige segmentos. `transcript.confirmed`
+  agenda análisis; parciales nunca ingresan al LLM.
+- `AiService`: cola persistente, deduplicación por huella y handlers por tipo
+  de generación. `OpenRouterService` encapsula modelo, timeout y configuración.
+- `Artifact`: contenido validado, selección explícita y huella de fuentes.
+  Regeneraciones no borran propuestas ni historial.
+- `workspace:changed`: `{ code, resource }`; la UI vuelve a consultar recursos.
+  Los eventos no sustituyen la autorización REST ni la recuperación de historial.
 
-## Preguntas (23)
-GET/PATCH /meetings/:code/questions expone preguntas con categoría, prioridad, motivo y fuentes. Resolver requiere respuesta o evidencia final de la misma reunión. La edición exige versión esperada y registra historial. El panel actualiza al recibir workspace:changed y recupera por REST; Analizar ahora reutiliza el trabajo activo.
+## API del levantamiento
 
-## Documento final (25)
-POST /meetings/:code/artifacts/document genera ocho secciones estructuradas y captura el modelo de entidades seleccionado. El inventario de aprobados se deriva del servidor. Cada propuesta conserva huella de fuentes e historial y admite edición con versión esperada. Marcar revisado exige fuentes vigentes. GET /meetings recupera reuniones del propietario desde PostgreSQL; /meetings/:code/review permite continuar sin reabrir LiveKit.
+| Recurso | Operaciones |
+|---|---|
+| `/meetings` | GET reuniones del propietario |
+| `/meetings/:code/transcripts` | GET páginas de 100, `cursor` opcional |
+| `/meetings/:code/transcripts/:id` | PATCH texto final y versión esperada |
+| `/meetings/:code/requirements` | GET y POST manual con fuentes opcionales |
+| `/meetings/:code/requirements/:id` | PATCH texto/estado o acción reopen/discard/restore, con versión |
+| `/meetings/:code/questions` | GET preguntas |
+| `/meetings/:code/questions/:id` | PATCH pregunta, estado, respuesta, evidencia y versión |
+| `/meetings/:code/analysis` | GET estado; POST analizar/reintentar |
+| `/meetings/:code/artifacts/entities\|document` | GET propuestas; POST generar |
+| `/meetings/:code/artifacts/:kind/:id` | PATCH contenido o acción select/review con versión |
+| `/meetings/:code/artifacts/document/:id/export/pdf\|docx` | GET exportar; `version` obligatoria |
 
-## Exportación (26)
-GET /meetings/:code/artifacts/document/:id/export/pdf|docx?version=N descarga exclusivamente una versión persistida y autorizada al propietario. PDFKit y docx comparten contenido estructurado; Sharp rasteriza SVG escapado. Diagramas detallados se dividen cada 16 atributos y las tablas conservan nombres completos. Los documentos sin revisión o con fuentes modificadas se identifican como BORRADOR. scripts/verify-exports.ts genera fixtures de QA sin proveedores ni datos reales.
+Conflictos de edición devuelven 409. Fuentes inválidas devuelven 400. Consultas
+ajenas o escrituras de invitados se rechazan aunque la UI oculte los controles.
+
+## Pruebas
+
+Los tests del servidor usan exclusivamente
+`postgresql://requimeet:requimeet@localhost:55440/requimeet_test` y limpian sus tablas.
+Nunca apuntar esta URL a datos de trabajo.
+
+```sh
+DATABASE_URL=postgresql://requimeet:requimeet@localhost:55440/requimeet_test npm run prisma:deploy -w apps/server
+npm test
+npm run test:exports
+```
+
+`test:exports` genera PDF y Word de prueba en `/tmp/requimeet-export-qa`.
+La verificación visual debe incluir acentos, encabezados, pies, tablas y diagramas;
+la extracción de texto no reemplaza inspeccionar las páginas renderizadas.
+
+`npm run test:browser` necesita servidor :3000, frontend :5173 y LiveKit local
+:7880, además de la base aislada `requimeet_qa` en :55440 con migraciones aplicadas.
+Ejecutar el servidor con esa DATABASE_URL y OPENROUTER_API_KEY vacío; el frontend
+con VITE_LIVEKIT_URL=ws://localhost:7880. Usa fixtures de texto y una pista de video
+canvas para probar pantalla compartida con dos clientes reales LiveKit, sin gasto IA.
+
+Instalar Chromium con `npx playwright install chromium` o indicar una ruta local
+mediante `PLAYWRIGHT_EXECUTABLE_PATH`. Las capturas y el informe quedan en
+`/tmp/requimeet-browser-qa`. La prueba comprueba 360, 768, 1366 y 1920px y un viewport
+equivalente a zoom de 200%. Crea usuarios/reuniones de prueba en esa base aislada.
+
+La integración automatizada cubre finalización, duplicados, revisiones atrasadas,
+permisos, reapertura, evidencia obligatoria, validación IA, generación, conflictos,
+fuentes desactualizadas y formatos exportados. Los proveedores reales se verifican
+por separado con una llamada mínima y audio sintético, sin contenido de reuniones.
