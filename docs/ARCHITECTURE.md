@@ -249,3 +249,41 @@ https://developers.deepgram.com/docs/finalize
 Las propuestas repetidas para preguntas RESOLVED/DISCARDED conocidas se ignoran
 antes de persistir: no reabren respuestas ni bloquean las preguntas nuevas del
 lote. IDs desconocidos y evidencia inválida en preguntas activas siguen rechazados.
+
+## Latencia y respeto del turno de voz
+
+El diagnóstico del turno lento mostró dos respuestas vacías del modelo y un
+reintento antes de obtener seguimiento. El worker agrupa finales durante 400 ms,
+revisa la cola cada 200 ms y encola inmediatamente el texto acumulado al terminar
+un lote. Hasta tres reuniones pueden ejecutarse simultáneamente, manteniendo
+exclusión por meetingId; una sala lenta ya no bloquea todas las demás. Este diseño
+sigue asumiendo una sola instancia del worker PostgreSQL.
+
+Las preguntas literales al comienzo de hasta tres segmentos confirmados
+consecutivos del anfitrión se reconocen conservadoramente con su cita y fuente
+elegible. Se exige toda la pregunta, tolerando puntuación y acentos del ASR; una
+coincidencia parcial o voz de invitado no basta. Las paráfrasis siguen
+dependiendo del modelo. Se conserva el contexto completo del lote y se prioriza
+latencia en OpenRouter sin cambiar deepseek/deepseek-v4-flash:
+https://openrouter.ai/docs/guides/routing/provider-selection
+
+Si el análisis resuelve el turno pero no propone seguimiento y no quedan preguntas
+abiertas, hace una pasada enfocada adicional con las mismas fuentes y decisiones
+actuales. No utiliza preguntas prefabricadas ni modifica respuestas humanas.
+Las propuestas para preguntas pendientes sin detección o con evidencia fuera de
+su ventana se descartan individualmente; nunca se guardan como respuestas. Una
+propuesta inválida así no obliga a reintentar otras respuestas válidas. Las fuentes
+desconocidas de requerimientos/preguntas nuevas siguen rechazándose.
+
+La persistencia no agrega seguimientos mientras exista una pregunta abierta.
+En la sala, la lista visible de preguntas/respuestas automáticas se conserva
+mientras LiveKit detecta algún hablante y durante 900 ms después. Una nueva voz
+reinicia la pausa. Las consultas y el análisis continúan; al liberar se utiliza
+la instantánea más reciente, no la primera que llegó. Esto protege el cambio
+visible de turno; la persistencia de respuestas validadas continúa en segundo plano.
+
+Cada resultado de análisis incluye timing: ageBeforeAttemptMs (edad del trabajo
+antes de ese intento; puede incluir intentos previos), firstAnswerMs,
+firstQuestionMs y totalMs desde el comienzo del intento. Los hitos de respuesta/
+pregunta corresponden a arrays recibidos/validados, no a pintura del navegador;
+para medir el recorrido completo se utiliza el harness de voz.

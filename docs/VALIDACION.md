@@ -174,3 +174,47 @@ Finalize sin promover parciales, detección repetida, protección de respuesta h
 cerrada y continuidad de texto acumulado tras agotar reintentos.
 Harness reproducible: scripts/verify-brody-voice.cjs (requiere audio WAV y servicios
 reales; puede generar consumo de proveedores).
+
+## Variación de latencia y pausa antes de avanzar
+
+Diagnóstico del turno previo de 8,822 s: dos ejecuciones devolvieron arrays vacíos,
+incluyendo omisión de la pregunta literal, y una tercera necesitó reintento.
+En las primeras pruebas de esta iteración también se observó un hito de respuesta
+de 9,349 ms con solo 22 ms de edad de cola: el proveedor/transporte sigue teniendo
+variación real. Priorizar latencia no equivale a una garantía de respuesta.
+
+Se corrigieron espera adicional entre lotes, exclusión global entre salas,
+detección literal (incluyendo pregunta dividida y puntuación de ASR), falta de
+seguimiento tras respuesta resuelta y rechazo global por una propuesta individual
+fuera de ventana. La repetición intermedia que dividió una pregunta y la terminó
+con punto quedó bloqueada; se añadió el caso automatizado antes de repetir.
+Las coincidencias literales requieren la pregunta completa, no un prefijo.
+
+Última prueba integral con el detector corregido, sin botones de avance:
+
+| Turno | Audio | Fin de audio → siguiente pregunta | Inicio de audio → siguiente pregunta |
+|---|---:|---:|---:|
+| Empresa y recepción de pedidos | 12,936 s | 1,179 s | 14,116 s |
+| Venta, bodega y distribución | 20,400 s | 1,397 s | 21,801 s |
+
+Una ejecución completa anterior a la corrección de puntuación registró 0,996 y
+1,684 s. Son muestras de desarrollo, no percentiles ni un SLA; no se excluyen los
+fallos intermedios descritos arriba para afirmar fiabilidad estadística. Los
+segundos audios se adaptaron a la pregunta efectivamente generada; su duración
+difiere de los audios antiguos, por lo que no representan un benchmark controlado.
+
+En la última ejecución: 7 trabajos completos, 8 segmentos confirmados y analizados,
+2 respuestas resueltas y 6 requerimientos. La respuesta de proceso conservó
+vendedor, bodega y distribución. Se verificó por DOM que ninguna siguiente pregunta
+apareciera antes de finalizar el audio ni con voz/retención activos. La captura de
+micrófono fue sintética: LiveKit y ambos proveedores fueron reales. No se prueba
+ruido/eco de un micrófono físico ni pausas humanas de duración arbitraria.
+
+Pruebas: suite servidor de 96 tests y frontend de 55 tests aprobadas. Después del
+límite defensivo de una propuesta nueva y ajuste del hito temporal, se repitieron
+los 23 tests de respuestas; build servidor y web correctos. Cobertura de pausa de
+600 ms que no libera el turno, reanudación de voz, entrega de la instantánea más
+reciente, literal incompleto que no se detecta, pregunta entre segmentos, evidencia
+inelegible que no bloquea una respuesta válida, y otra reunión que progresa mientras
+una está detenida en el proveedor. Revisión de capturas desktop/móvil sin cambios
+de layout; detector mecánico de interfaz sin hallazgos.

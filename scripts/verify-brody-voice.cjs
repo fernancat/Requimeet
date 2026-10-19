@@ -38,7 +38,7 @@ async function main(){
  await window.testAudio.ctx.resume();return window.testAudio.dest.stream;
  };
  window.brodyChanges=[];
- new MutationObserver(()=>{const text=document.querySelector('.brody-question')?.textContent; if(text&&window.brodyChanges.at(-1)?.text!==text)window.brodyChanges.push({at:Date.now(),text})}).observe(document,{subtree:true,childList:true,characterData:true});
+ new MutationObserver(()=>{const text=document.querySelector('.brody-question')?.textContent; if(text&&window.brodyChanges.at(-1)?.text!==text)window.brodyChanges.push({at:Date.now(),text,held:document.querySelector('.brody-assistant')?.dataset.turnHeld==='true',speaking:document.querySelector('.brody-assistant')?.dataset.speaking==='true'})}).observe(document,{subtree:true,childList:true,characterData:true});
  },{token,code:meeting.code});
  await page.goto('http://localhost:5173/m/'+meeting.code);
  await page.locator('.brody-question').waitFor({timeout:30000});
@@ -71,6 +71,7 @@ async function main(){
  fs.writeFileSync(reportFile,JSON.stringify(report,null,2));
  console.log('ROUND_RESULT',JSON.stringify(result));
  if(!changed)throw Error('Brody no avanzó en 90 segundos');
+ if(changed.held||changed.speaking||changed.at<times.end)throw Error('Brody adelantó la pregunta durante la intervención');
  const answered=questions.find(q=>q.text===before);
  if(!answered?.automaticResolution||answered.status!=='RESOLVED')throw Error('La pregunta cambió sin resolver automáticamente la anterior');
  }
@@ -84,6 +85,8 @@ async function main(){
  }
  if(!report.final.transcripts.items.length||report.final.transcripts.items.some(s=>!s.isFinal||s.analyzedRevision!==s.revision))throw Error('Quedaron fragmentos sin procesar');
  if(report.final.analysis.jobs.some(j=>j.status!=='completed'))throw Error('Quedaron trabajos fallidos o sin terminar');
+ await page.setViewportSize({width:390,height:844});
+ await page.screenshot({path:path.join(artifacts,'voice-mobile.png'),fullPage:true});
  console.log('DONE');
 }
 main().catch(e=>{report.error=e.message;console.error('FAIL',e.message);process.exitCode=1}).finally(async()=>{

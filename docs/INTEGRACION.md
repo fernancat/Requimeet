@@ -182,3 +182,12 @@ processor, Deepgram, persistencia, OpenRouter y Socket.IO hasta el DOM. La prueb
 crea una cuenta/reunión aislada, espera que los finales queden analizados, guarda
 capturas e informe sin tokens y termina la reunión. Los archivos contienen solo
 los datos de la conversación de prueba. No mide micrófono físico, ruido ni eco.
+
+Brody conserva la pregunta visible durante la voz y pausas menores de 900 ms.
+Si ya tiene el seguimiento listo lo muestra después de la pausa; si el proveedor
+sigue trabajando mantiene el estado de análisis. Recargar la sala para cargar
+este comportamiento. No requiere migraciones ni nuevas credenciales.
+El harness verifica que la siguiente pregunta no aparezca durante el audio ni con
+data-speaking/data-turn-held activos. Para el segundo turno preparar un WAV que
+formule la pregunta realmente mostrada y la responda; una pregunta pregrabada
+distinta no prueba correctamente el reconocimiento de ese seguimiento.
