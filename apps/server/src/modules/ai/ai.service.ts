@@ -17,7 +17,7 @@ type AnalysisInput = {
   segments: { id: string; text: string; revision: number }[];
   context: { id: string; text: string }[];
   requirements: { text: string; status: string }[];
-  questions: { text: string; status: string; answer: string }[];
+  questions: { id: string; version: number; text: string; status: string; answer: string; eligibleSourceIds: string[] }[];
 };
 export type JobHandler = (job: AiJob) => Promise<unknown>;
 @Injectable()
@@ -140,7 +140,7 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
     });
     if (!pending.length) return null;
     // Acota caracteres además del número de segmentos.
-    const segments = [];
+    const segments: AnalysisInput['segments'] = [];
     let size = 0;
     for (const s of pending) {
       if (size && size + s.text.length > 40000) break;
@@ -165,7 +165,7 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
     });
     const questions = await this.prisma.question.findMany({
       where: { meetingId },
-      select: { text: true, status: true, answer: true },
+      select: { id: true, version: true, text: true, status: true, answer: true, askedAt: true, answerSuggestion: true },
       take: 100,
       orderBy: { createdAt: 'desc' },
     });
@@ -173,7 +173,11 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
       segments,
       context: context.map((s) => ({ ...s, text: s.text.slice(0, 3000) })),
       requirements,
-      questions,
+      questions: questions.map(q => ({ id: q.id, version: q.version, text: q.text, status: q.status, answer: q.answer,
+        eligibleSourceIds: q.status === 'ASKED' && !q.answer && !q.answerSuggestion && q.askedAt
+          ? pending.filter(s => segments.some(item => item.id === s.id) && s.createdAtMs >= q.askedAt!.getTime()).map(s => s.id)
+          : [],
+      })),
     };
     const job = await this.enqueue(meetingId, 'analysis', input);
     if (retry && job.status === 'failed')
@@ -243,7 +247,7 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
     const input = job.input as unknown as AnalysisInput;
     const result = analysisSchema.parse(
       await this.router.generate(
-        'Extrae solo nuevos requerimientos y preguntas útiles para el anfitrión en vivo. No repitas los existentes ni preguntas resueltas/descartadas. Prioriza vacíos concretos; máximo 5 preguntas por lote. JSON: {"requirements":[{"text":"...","sourceIds":["id"]}],"questions":[{"text":"...","category":"permissions|validations|rules|exceptions|missing","reason":"...","priority":"HIGH|MEDIUM|LOW","sourceIds":["id"]}]}. Usa IDs de segments o context como evidencia.',
+        'Extrae solo nuevos requerimientos y preguntas útiles para el anfitrión en vivo. No repitas los existentes ni preguntas resueltas/descartadas. Prioriza vacíos concretos; máximo 5 preguntas por lote. JSON: {"requirements":[{"text":"...","sourceIds":["id"]}],"questions":[{"text":"...","category":"permissions|validations|rules|exceptions|missing","reason":"...","priority":"HIGH|MEDIUM|LOW","sourceIds":["id"]}]}. Usa IDs de segments o context como evidencia. Además devuelve "answerSuggestions":[{"questionId":"id","text":"respuesta sintetizada","sourceIds":["id"]}]. Para preguntas ASKED con eligibleSourceIds, evalúa si esos segmentos responden explícitamente a la pregunta. Usa SOLO sus eligibleSourceIds; no confundir repetir la pregunta con responderla. No inventes decisiones ni completes respuestas ambiguas. Si no hay respuesta clara devuelve []. Cualquier participante, incluido el anfitrión, puede responder. Las sugerencias se revisarán antes de resolver la pregunta.',
         input,
       ),
     );
@@ -252,7 +256,25 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
     );
     for (const item of [...result.requirements, ...result.questions])
       checkSources(item.sourceIds, allowed);
+    for (const suggestion of result.answerSuggestions) {
+      const question = input.questions.find(q => q.id === suggestion.questionId);
+      if (!question || question.status !== 'ASKED') throw new Error('Respuesta para una pregunta no realizada');
+      checkSources(suggestion.sourceIds, new Set(question.eligibleSourceIds ?? []));
+    }
     await this.prisma.$transaction(async (tx) => {
+      for (const suggestion of result.answerSuggestions) {
+        const question = input.questions.find(q => q.id === suggestion.questionId)!;
+        const evidence = await tx.transcriptSegment.findMany({
+          where: { meetingId: job.meetingId, id: { in: suggestion.sourceIds }, isFinal: true },
+          select: { id: true, revision: true },
+        });
+        if (evidence.length !== new Set(suggestion.sourceIds).size || evidence.some(s => !input.segments.some(original => original.id === s.id && original.revision === s.revision))) continue;
+        // Human edits during inference win. A proposal never resolves the question.
+        await tx.question.updateMany({
+          where: { id: question.id, meetingId: job.meetingId, version: question.version, status: 'ASKED', answer: '', answerSuggestion: { equals: Prisma.DbNull } },
+          data: { answerSuggestion: { text: suggestion.text, sourceIds: suggestion.sourceIds }, version: { increment: 1 } },
+        });
+      }
       const current = await tx.requirement.findMany({
         where: { meetingId: job.meetingId },
         select: { text: true, originalText: true },

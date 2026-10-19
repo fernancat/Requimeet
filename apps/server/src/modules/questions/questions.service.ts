@@ -3,6 +3,7 @@ import {
   ConflictException,
   Injectable,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { z } from 'zod';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -10,6 +11,7 @@ import { MeetingAccessService } from '../meetings/meeting-access.service';
 import type { Caller } from '../meetings/caller-resolver';
 const update = z
   .object({
+    dismissSuggestion: z.boolean().optional(),
     version: z.number().int().positive(),
     text: z.string().trim().min(1).max(2000),
     status: z.enum(['PENDING', 'ASKED', 'RESOLVED', 'DISCARDED']),
@@ -64,6 +66,8 @@ export class QuestionsService {
         {
           text: previous.text,
           answer: previous.answer,
+          answerSuggestion: previous.answerSuggestion,
+          askedAt: previous.askedAt?.toISOString() ?? null,
           evidenceIds: previous.evidenceIds,
           status: previous.status,
           version: previous.version,
@@ -71,10 +75,13 @@ export class QuestionsService {
           at: new Date().toISOString(),
         },
       ];
+      const { dismissSuggestion, ...fields } = input;
       const changed = await tx.question.updateMany({
         where: { id, version: input.version },
         data: {
-          ...input,
+          ...fields,
+          answerSuggestion: Prisma.DbNull,
+          askedAt: input.status === 'ASKED' ? (previous.status !== 'ASKED' || dismissSuggestion ? new Date() : previous.askedAt) : previous.askedAt,
           evidenceIds: ids,
           version: { increment: 1 },
           history,

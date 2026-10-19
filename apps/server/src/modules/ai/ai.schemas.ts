@@ -1,6 +1,11 @@
 import { z } from 'zod';
 export const sources = z.array(z.string().min(1)).min(1).max(50);
 export const analysisSchema = z.object({
+  answerSuggestions: z.array(z.object({
+    questionId: z.string().min(1),
+    text: z.string().trim().min(1).max(5000),
+    sourceIds: sources,
+  })).max(12).default([]),
   requirements: z
     .array(z.object({ text: z.string().min(1).max(5000), sourceIds: sources }))
     .max(30),
