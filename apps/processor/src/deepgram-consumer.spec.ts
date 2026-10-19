@@ -213,6 +213,7 @@ it('espera OPEN, conserva el último final al cerrar y entrega revisiones establ
   expect(sent[0]).toBeInstanceOf(Buffer);
   listeners.message(transcriptMessage('parcial'));
   await consumer.onSessionEnd();
-  expect(results.at(-1)).toMatchObject({ isFinal: true, resultId: results[0].resultId, payload: { text: 'final pendiente' } });
-  expect(results.at(-1)!.revision).toBeGreaterThan(results[0].revision!);
+  const transcripts = results.filter(r => r.kind.startsWith('transcript'));
+  expect(transcripts.at(-1)).toMatchObject({ isFinal: true, resultId: transcripts[0].resultId, payload: { text: 'final pendiente' } });
+  expect(transcripts.at(-1)!.revision).toBeGreaterThan(transcripts[0].revision!);
 });

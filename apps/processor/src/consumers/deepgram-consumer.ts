@@ -139,6 +139,7 @@ export class DeepgramConsumer implements MediaConsumer {
     };
     socket.on('message', (data) => this.handleMessage(stream, data.toString()));
     socket.on('open', () => {
+      this.deliver({ resultId: randomUUID(), meetingId: this.meetingId, kind: 'analysis', isFinal: false, createdAtMs: Date.now(), payload: { processingStatus: 'connected' } });
       this.retryAt.delete(frame.track.trackSid);
       for (const bytes of stream.pending.splice(0)) socket.send(bytes);
       if (stream.closing) socket.send('{"type":"CloseStream"}');
@@ -148,6 +149,7 @@ export class DeepgramConsumer implements MediaConsumer {
       this.emitFinal(stream);
       if (this.streams.get(stream.track.trackSid) === stream) this.streams.delete(stream.track.trackSid);
       if (!stream.closing) {
+        this.deliver({ resultId: randomUUID(), meetingId: this.meetingId, kind: 'analysis', isFinal: false, createdAtMs: Date.now(), payload: { processingStatus: 'interrupted' } });
         const attempts = (this.retryAt.get(stream.track.trackSid)?.attempts ?? 0) + 1;
         this.retryAt.set(stream.track.trackSid, { attempts, at: Date.now() + Math.min(1000 * 2 ** (attempts - 1), 10000) });
         this.logger('Deepgram: conexión interrumpida; se reintentará con el próximo audio');
