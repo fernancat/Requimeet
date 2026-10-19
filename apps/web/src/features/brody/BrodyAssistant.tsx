@@ -1,0 +1,101 @@
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import type { AnalysisStatus, QuestionDto, QuestionStatus } from '@requimeet/contracts';
+import type { Requirement } from '../requirements/requirements-api';
+import { updateRequirement } from '../requirements/requirements-api';
+import { api } from '../../lib/api';
+import { useResource, useUnsaved } from '../workspace/useResource';
+import { nextQuestion } from './brody-queue';
+const BrodyAvatar = lazy(() => import('./BrodyAvatar'));
+
+export default function BrodyAssistant({ code, token, canEdit, refreshVersion, interrupted, connected, transcriptText }: {
+  code: string; token: string; canEdit: boolean; refreshVersion: number;
+  interrupted: boolean; connected: boolean; transcriptText?: string;
+}) {
+  const questions = useResource<QuestionDto[]>(`/meetings/${code}/questions`, token, refreshVersion);
+  const requirements = useResource<Requirement[]>(`/meetings/${code}/requirements`, token, refreshVersion);
+  const analysis = useResource<AnalysisStatus>(`/meetings/${code}/analysis`, token, refreshVersion);
+  const detectionsRef = useRef<HTMLElement>(null);
+  const [currentId, setCurrentId] = useState<string>();
+  const [deferred, setDeferred] = useState<string[]>([]);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const current = nextQuestion(questions.data ?? [], deferred, currentId);
+  useEffect(() => { setCurrentId(current?.id); }, [current?.id]);
+  useUnsaved(Object.values(answers).some(answer => answer.trim().length > 0));
+  const working = analysis.data?.jobs.some(j => j.status === 'running' || j.status === 'queued');
+  const failed = analysis.data?.jobs[0]?.status === 'failed';
+  const openCount = questions.data?.filter(q => q.status === 'PENDING' || q.status === 'ASKED').length ?? 0;
+  const detected = (requirements.data ?? []).filter(r => !r.discarded).slice().reverse();
+  async function changeQuestion(status: QuestionStatus) {
+    if (!current || busy) return;
+    setBusy(true); setError('');
+    try {
+      const updated = await api<QuestionDto>(`/meetings/${code}/questions/${current.id}`, { token, method: 'PATCH', body: {
+        version: current.version, text: current.text, status,
+        answer: answers[current.id] ?? current.answer, evidenceIds: current.evidenceIds,
+      } });
+      questions.setData(items => items?.map(q => q.id === updated.id ? updated : q) ?? [updated]);
+      setAnswers(all => { const copy = { ...all }; delete copy[updated.id]; return copy; });
+      setNotice(status === 'RESOLVED' ? 'Respuesta guardada. Vamos con la siguiente.' : status === 'ASKED' ? 'Pregunta marcada como realizada. Escuchemos la respuesta.' : 'Pregunta descartada.');
+    } catch (e) { setError(e instanceof Error ? e.message : 'No se pudo guardar'); void questions.reload(); }
+    finally { setBusy(false); }
+  }
+  async function analyze() {
+    setBusy(true); setError('');
+    try { await api(`/meetings/${code}/analysis`, { token, method: 'POST' }); await analysis.reload(); }
+    catch (e) { setError(e instanceof Error ? e.message : 'No se pudo analizar'); }
+    finally { setBusy(false); }
+  }
+  async function approve(item: Requirement) {
+    setBusy(true); setError('');
+    try { await updateRequirement(code, item.id, token, { version: item.version, status: 'APPROVED' }); await requirements.reload(); setNotice('Requerimiento aprobado.'); }
+    catch (e) { setError(e instanceof Error ? e.message : 'No se pudo aprobar'); void requirements.reload(); }
+    finally { setBusy(false); }
+  }
+  const state = interrupted ? 'Audio interrumpido' : !connected ? 'Conectando a la reunión' : !analysis.data ? 'Conectando con el asistente' : !analysis.data.enabled ? 'IA no disponible' : working ? 'Analizando lo conversado…' : current ? 'Tengo una sugerencia' : 'Esperando nuevos resultados';
+  return <section className="brody-assistant" aria-label="Brody, asistente en vivo">
+    <header className="brody-heading"><div><h2>Brody</h2><span role="status">{state}</span></div><span className="brody-live">En vivo</span></header>
+    <div className="brody-conversation">
+      <Suspense fallback={<div className="brody-avatar" />}><BrodyAvatar /></Suspense>
+      <div className="brody-bubble" aria-live="polite" aria-atomic="true">
+        {current ? <><h3>{current.status === 'ASKED' ? 'Escuchemos la respuesta' : 'Ahora podrías preguntar'}</h3><p className="brody-question">{current.text}</p></>
+          : <p>{interrupted ? 'La transcripción se interrumpió. Las sugerencias guardadas siguen aquí.' : deferred.length ? 'Dejamos algunas preguntas para después. Puedes retomarlas cuando encajen en la conversación.' : 'Conversemos sobre lo que necesitan. Aquí te propondré qué preguntar y te mostraré los requerimientos que vaya detectando.'}</p>}
+      </div>
+    </div>
+    {detected.length > 0 && <button className="secondary brody-detection-alert" onClick={() => detectionsRef.current?.scrollIntoView({ block: 'nearest', behavior: 'instant' })}><span role="status">{detected.length} requerimientos detectados</span> · Ver aquí</button>}
+    <div className="brody-scroll">
+      {notice && <p className="brody-notice" role="status">{notice}</p>}
+      {(error || questions.error || requirements.error || analysis.error) && <p role="alert">{error || questions.error || requirements.error || analysis.error}</p>}
+      {failed && <p role="alert">El último análisis falló. Puedes reintentarlo con «Analizar ahora».</p>}
+      {current && <div className="brody-next">
+        <details><summary>Por qué conviene preguntarlo</summary><p>{current.reason}</p></details>
+        {canEdit && <>
+          <div className="brody-actions">
+            {current.status === 'PENDING' && <button disabled={busy} onClick={() => void changeQuestion('ASKED')}>Ya la pregunté</button>}
+            <button className="secondary" disabled={busy} onClick={() => { setDeferred(all => [...all, current.id]); setNotice('La guardé para después.'); }}>Después</button>
+            <button className="secondary" disabled={busy} onClick={() => void changeQuestion('DISCARDED')}>Descartar</button>
+          </div>
+          <label htmlFor="brody-answer">Respuesta acordada</label>
+          <textarea id="brody-answer" rows={2} maxLength={5000} placeholder="Anota lo que acordaron para cerrar esta pregunta" value={answers[current.id] ?? current.answer} onChange={e => setAnswers(all => ({ ...all, [current.id]: e.target.value }))} />
+          <button disabled={busy || !(answers[current.id] ?? current.answer).trim()} onClick={() => void changeQuestion('RESOLVED')}>Guardar respuesta y continuar</button>
+        </>}
+      </div>}
+      <div className="brody-queue"><span>{openCount} preguntas abiertas</span>{deferred.length > 0 && <button className="secondary" onClick={() => { setDeferred([]); setCurrentId(undefined); }}>Retomar pendientes</button>}</div>
+      <section ref={detectionsRef} className="brody-detections" aria-label="Requerimientos detectados">
+        <h3>Lo que vamos definiendo</h3>
+        <p className="brody-count" role="status">{detected.length ? `${detected.length} requerimientos detectados` : 'Los requerimientos aparecerán aquí al confirmar la transcripción.'}</p>
+        {detected.slice(0, 5).map(item => <article key={item.id}>
+          <span className="brody-requirement-status">{item.status === 'APPROVED' ? 'Aprobado' : 'Requerimiento por revisar'}</span>
+          <p>{item.text}</p>
+          {canEdit && item.status !== 'APPROVED' && <button className="secondary" disabled={busy} onClick={() => void approve(item)}>Aprobar requerimiento</button>}
+        </article>)}
+        {detected.length > 5 && <p>Y {detected.length - 5} más en la revisión detallada.</p>}
+      </section>
+      <details className="brody-transcript"><summary>Último fragmento de la conversación</summary><p>{transcriptText || 'Todavía no hay transcripción. Activa el micrófono y empieza a hablar.'}</p></details>
+      {canEdit && <button className="secondary" disabled={busy || working || !analysis.data?.enabled} onClick={() => void analyze()}>Analizar ahora</button>}
+      <small className="brody-disclaimer">Brody sugiere; tú decides. Las respuestas y aprobaciones se guardan en el levantamiento.</small>
+    </div>
+  </section>;
+}
