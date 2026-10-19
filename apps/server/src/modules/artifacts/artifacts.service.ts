@@ -8,11 +8,11 @@ import type { Caller } from '../meetings/caller-resolver';
 import { AiService } from '../ai/ai.service';
 import { OpenRouterService } from '../ai/openrouter.service';
 import { checkSources } from '../ai/ai.schemas';
-import { entitySchema } from './artifact.schemas';
+import { documentSchema, entitySchema } from './artifact.schemas';
 @Injectable()
 export class ArtifactsService implements OnModuleInit {
  constructor(private readonly prisma: PrismaService, private readonly access: MeetingAccessService, private readonly ai: AiService, private readonly router: OpenRouterService, private readonly events: EventEmitter2) {}
- onModuleInit() { this.ai.register('entities', job => this.generateEntities(job)); }
+ onModuleInit() { this.ai.register('entities', job => this.generateEntities(job)); this.ai.register('document', job => this.generateDocument(job)); }
  async source(meetingId: string, kind: string) {
   const requirements = await this.prisma.requirement.findMany({ where: { meetingId }, orderBy: { id: 'asc' }, select: { id: true, text: true, status: true, version: true, discarded: true, sourceIds: true } });
   const questions = kind === 'document' ? await this.prisma.question.findMany({ where: { meetingId }, orderBy: { id: 'asc' }, select: { id: true, text: true, answer: true, status: true, version: true } }) : [];
@@ -39,13 +39,13 @@ export class ArtifactsService implements OnModuleInit {
   if (JSON.stringify(source).length > 250000) throw new BadRequestException('El levantamiento excede el límite de generación (250000 caracteres)');
   return this.ai.enqueue(meeting.id, kind, source);
  }
- protected kind(kind: string) { if (kind !== 'entities') throw new NotFoundException('Recurso desconocido'); }
+ protected kind(kind: string) { if (kind !== 'entities' && kind !== 'document') throw new NotFoundException('Recurso desconocido'); }
  async edit(code: string, kind: string, id: string, caller: Caller, body: { version: number; content?: unknown; action?: string }) {
   this.kind(kind);
   const meeting = await this.access.require(code, caller, true);
   if (!Number.isInteger(body.version) || body.version < 1 || body.action && !['select','review'].includes(body.action)) throw new BadRequestException('Versión o acción inválida');
   const source = await this.source(meeting.id, kind);
-  const content = body.content === undefined ? undefined : this.validate(kind, body.content, source.requirements.filter(r => r.status === 'APPROVED' && !r.discarded).map(r => r.id));
+  const content = body.content === undefined ? undefined : this.validate(kind, body.content, kind === 'document' ? [...source.requirements, ...source.questions, ...source.transcripts].map(r => r.id) : source.requirements.filter(r => r.status === 'APPROVED' && !r.discarded).map(r => r.id));
   const result = await this.prisma.$transaction(async tx => {
    const previous = await tx.artifact.findFirst({ where: { id, meetingId: meeting.id, kind } });
    if (!previous || previous.version !== body.version) throw new ConflictException('El contenido cambió; recarga antes de guardar');
@@ -60,6 +60,13 @@ export class ArtifactsService implements OnModuleInit {
   return result;
  }
  validate(kind: string, value: unknown, allowedIds: string[]) {
+  if (kind === 'document') {
+   const parsed = documentSchema.safeParse(value);
+   if (!parsed.success) throw new BadRequestException(parsed.error.issues.map(i => i.message).join('; '));
+   try { for (const item of parsed.data.sections.flatMap(s => s.items)) checkSources(item.sourceIds, new Set(allowedIds)); }
+   catch { throw new BadRequestException('El documento contiene fuentes ajenas'); }
+   return parsed.data;
+  }
   const parsed = entitySchema.safeParse(value);
   if (!parsed.success) throw new BadRequestException(parsed.error.issues.map(i => i.message).join('; '));
   const allowed = new Set(allowedIds);
@@ -71,6 +78,16 @@ export class ArtifactsService implements OnModuleInit {
   const item = await this.prisma.artifact.upsert({ where: { jobId: job.id }, create: { jobId: job.id, meetingId: job.meetingId, kind: job.kind, content: content as Prisma.InputJsonValue, sourceFingerprint: fingerprint }, update: {} });
   await this.prisma.meeting.updateMany({ where: { id: job.meetingId, ...(job.kind === 'entities' ? { selectedEntityId: null } : { selectedDocumentId: null }) }, data: job.kind === 'entities' ? { selectedEntityId: item.id } : { selectedDocumentId: item.id } });
   return { artifactId: item.id };
+ }
+ private async generateDocument(job: AiJob) {
+  const source = job.input as unknown as Awaited<ReturnType<ArtifactsService['source']>>;
+  const output = await this.router.generate('Genera un borrador de especificación. JSON {"title":"...","sections":[{"key":"scope","items":[{"text":"...","sourceIds":["id"]}]}],"entities":{"entities":[],"relations":[]}}. Incluye exactamente estas ocho secciones: scope, roles, requirements, business_rules, priorities, acceptance, contradictions, pending. requirements solo incluye aprobados no descartados. Las prioridades y criterios no confirmados se etiquetan como propuesta para revisión. No inventes decisiones. Cada criterio de aceptación referencia su requerimiento. Contradicciones citan las fuentes enfrentadas, sin resolverlas automáticamente. Pendientes incluye requerimientos sin aprobar y preguntas abiertas. Arrays vacíos cuando no haya evidencia. Conserva los IDs de fuentes. El modelo de entidades se incorporará desde el modelo guardado.', source);
+  const candidate = output as Record<string, unknown>;
+  candidate.entities = source.entities?.content ?? { entities: [], relations: [] };
+  const content = documentSchema.parse(this.validate('document', candidate, [...source.requirements, ...source.questions, ...source.transcripts].map(r => r.id)));
+  // El inventario confirmado se deriva de datos persistidos, no de inferencias del modelo.
+  content.sections.find(s => s.key === 'requirements')!.items = source.requirements.filter(r => r.status === 'APPROVED' && !r.discarded).map(r => ({ text: r.text, sourceIds: [r.id] }));
+  return this.saveProposal(job, content, source.fingerprint);
  }
  private async generateEntities(job: AiJob) {
   const source = job.input as unknown as Awaited<ReturnType<ArtifactsService['source']>>;

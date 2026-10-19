@@ -36,6 +36,10 @@ export class MeetingsController {
     private readonly guestTokens: GuestTokenService,
   ) {}
 
+  @Get()
+  @UseGuards(HostAuthGuard)
+  listOwned(@Req() req: HostRequest) { return this.meetings.listOwned(req.user.hostUserId); }
+
   @Post()
   @UseGuards(HostAuthGuard)
   create(@Req() req: HostRequest, @Body() dto: CreateMeetingDto) {

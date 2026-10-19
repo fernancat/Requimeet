@@ -16,3 +16,12 @@ export interface EntityModel {
 }
 export interface ArtifactDto<T> { id: string; kind: string; content: T; sourceFingerprint: string; version: number; reviewed: boolean; stale: boolean; createdAt: string; history: { version: number; content: T; at: string; author: string }[] }
 export interface ArtifactList<T> { items: ArtifactDto<T>[]; selectedId: string | null; excludedCount: number }
+
+export const DOCUMENT_SECTIONS = ['scope', 'roles', 'requirements', 'business_rules', 'priorities', 'acceptance', 'contradictions', 'pending'] as const;
+export type DocumentSectionKey = typeof DOCUMENT_SECTIONS[number];
+export const DOCUMENT_LABELS: Record<DocumentSectionKey, string> = { scope: 'Alcance', roles: 'Roles', requirements: 'Requerimientos aprobados', business_rules: 'Reglas de negocio', priorities: 'Prioridades', acceptance: 'Criterios de aceptación', contradictions: 'Contradicciones', pending: 'Pendientes' };
+export interface FinalDocument {
+ title: string;
+ sections: { key: DocumentSectionKey; items: { text: string; sourceIds: string[] }[] }[];
+ entities: EntityModel;
+}

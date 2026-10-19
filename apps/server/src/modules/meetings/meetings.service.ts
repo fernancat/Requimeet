@@ -96,6 +96,11 @@ export class MeetingsService {
     return this.toSummary(updated);
   }
 
+  async listOwned(hostUserId: string): Promise<MeetingSummary[]> {
+    const meetings = await this.prisma.meeting.findMany({ where: { hostId: hostUserId }, orderBy: { createdAt: 'desc' } });
+    return meetings.map(meeting => this.toSummary(meeting));
+  }
+
   async publicInfo(code: string): Promise<MeetingPublicInfo> {
     const meeting = await this.prisma.meeting.findUnique({ where: { code } });
     if (!meeting) {

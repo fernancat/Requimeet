@@ -54,3 +54,6 @@ AiModule escucha transcript.confirmed con agrupación de 1.5 segundos. PostgreSQ
 
 ## Preguntas (23)
 GET/PATCH /meetings/:code/questions expone preguntas con categoría, prioridad, motivo y fuentes. Resolver requiere respuesta o evidencia final de la misma reunión. La edición exige versión esperada y registra historial. El panel actualiza al recibir workspace:changed y recupera por REST; Analizar ahora reutiliza el trabajo activo.
+
+## Documento final (25)
+POST /meetings/:code/artifacts/document genera ocho secciones estructuradas y captura el modelo de entidades seleccionado. El inventario de aprobados se deriva del servidor. Cada propuesta conserva huella de fuentes e historial y admite edición con versión esperada. Marcar revisado exige fuentes vigentes. GET /meetings recupera reuniones del propietario desde PostgreSQL; /meetings/:code/review permite continuar sin reabrir LiveKit.
