@@ -109,10 +109,10 @@ export default function BrodyAssistant({ code, token, canEdit, refreshVersion, i
           <p><strong>Último texto recibido:</strong> {transcriptText || 'Todavía no llega texto del audio. Comprueba el micrófono y sus permisos.'}</p>
           {failed && <p>El análisis falló. Reintenta con «Analizar ahora» o escribe la respuesta.</p>}
         </div>}
+        {current.status === 'PENDING' && <p className="brody-notice">Haz esta pregunta con tus propias palabras. Detectaré cuándo la haces y seguiré la respuesta, sin botones.</p>}
         <details><summary>Por qué conviene preguntarlo</summary><p>{current.reason}</p></details>
         {canEdit && <>
           <div className="brody-actions">
-            {current.status === 'PENDING' && <button disabled={busy} onClick={() => void changeQuestion('ASKED')}>Ya la pregunté</button>}
             <button className="secondary" disabled={busy} onClick={() => { setDeferred(all => [...all, current.id]); setNotice('La guardé para después.'); }}>Después</button>
             <button className="secondary" disabled={busy} onClick={() => void changeQuestion('DISCARDED')}>Descartar</button>
           </div>

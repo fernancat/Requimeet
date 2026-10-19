@@ -151,7 +151,7 @@ La licencia y procedencia están en `apps/web/public/models/brody/LICENSE.txt`.
 
 ### Respuestas orales propuestas por Brody
 
-`Question.askedAt` marca el inicio de la escucha al pasar a ASKED. El análisis
+`Question.askedAt` marca el momento de la pregunta detectada al pasar a ASKED. El análisis
 incremental también produce `answerSuggestions` opcionales para preguntas realizadas,
 sin respuesta humana. Una propuesta dudosa puede aclararse con nuevos segmentos. Cada pregunta expone al proveedor los
 IDs de segmentos finales nuevos y del contexto reciente con `createdAtMs >= askedAt` como evidencia
@@ -168,3 +168,23 @@ El historial identifica a Brody y la ejecución. La interfaz muestra las respues
 automáticas con acciones para corregir o seguir aclarando. Rechazar limpia la propuesta y reinicia
 `askedAt`, sin volver a usar el mismo texto. El historial conserva la propuesta al
 editar. No se agregan llamadas IA: la detección comparte el lote incremental.
+
+
+### Apertura y detección de preguntas sin botones
+
+Cada reunión nueva crea transaccionalmente una pregunta PENDING de apertura:
+«Para empezar, ¿a qué se dedica la empresa?». Es una guía de entrevista, sin fuentes
+inventadas ni requerimientos atribuidos a la empresa. El mismo análisis incremental
+propone siguientes preguntas contextualizadas (máximo dos por lote): procesos,
+personas, dificultades, objetivos y después reglas específicas.
+
+`askedQuestions` devuelve pregunta existente, segmento y cita literal. Solo se
+aceptan segmentos finales del anfitrión, posteriores a la creación de la pregunta,
+con revisión vigente y cita verificable. Se registra el paso PENDING→ASKED y la
+fuente en historial. La respuesta puede llegar en otro lote o en el mismo segmento;
+en este último caso se comprueba que su cita aparezca después de la pregunta.
+Detección y resolución comparten transacción y control de versión para no pisar
+ediciones humanas. No se agregan llamadas al proveedor ni se procesa texto parcial.
+La clasificación semántica sigue dependiendo del modelo; citar el tema no debería
+interpretarse como formular una pregunta. Las acciones manuales quedan para dudas,
+correcciones o cambios de rumbo, no para el camino habitual de la entrevista.

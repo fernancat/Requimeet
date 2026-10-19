@@ -107,7 +107,7 @@ por separado con una llamada mínima y audio sintético, sin contenido de reunio
 
 Al entrar a una reunión, «Brody · En vivo» se abre automáticamente. Hablar con el
 micrófono activo produce segmentos finales y alimenta el análisis incremental
-existente. Al llegar preguntas, el globo propone una por vez. «Ya la pregunté»
+existente. Al llegar preguntas, el globo propone una por vez. La detección de la pregunta hablada
 registra ASKED; «Guardar respuesta y continuar» registra RESOLVED con la respuesta;
 «Después» conserva la pregunta pendiente para retomarla durante esa sesión.
 Los requerimientos aparecen en el mismo flujo y se aprueban explícitamente.
@@ -125,8 +125,8 @@ durante una reunión. El chunk 3D se carga por separado del frontend principal.
 
 Aplicar `prisma:deploy` y `prisma:generate` para la migración
 `20261019050000_question_answer_suggestions` (ya aplicada en el entorno local).
-Recargar el frontend. Marcar «Ya la pregunté» antes de responder, hablar con el
-micrófono activo y hacer una pausa. No se necesita otro participante. Cuando llega
+Recargar el frontend. Hacer la pregunta sugerida en voz alta, hablar con el
+micrófono activo y hacer una pausa. Brody detecta la pregunta sin marcar botones. No se necesita otro participante. Cuando llega
 la transcripción final, Brody guarda y avanza automáticamente si la respuesta es
 explícita, completa y sustentada por citas verificadas. Si hay dudas, muestra
 «Necesito aclarar esta respuesta»: se puede aclarar hablando o confirmar/editando
@@ -144,4 +144,13 @@ Avance automático: migración `20261019060000_question_auto_resolution` aplicad
 el entorno local. Una respuesta resuelta automáticamente no aprueba requerimientos.
 La clasificación de claridad depende del modelo; se conservan evidencia, historial
 y corrección manual. Respuestas parciales, tentativas o contradictorias requieren
-aclaración. El anfitrión sigue marcando «Ya la pregunté» al realizar una pregunta.
+aclaración. El anfitrión realiza la pregunta hablando; Brody detecta cuándo se formula.
+
+
+Para probar la apertura guiada, crear una reunión nueva: Brody muestra de inmediato
+«Para empezar, ¿a qué se dedica la empresa?». Hacer esa pregunta, también con otras
+palabras, y responder o escuchar al invitado. El análisis detecta la pregunta y
+continúa con la respuesta sin «Ya la pregunté». La siguiente pregunta se adapta a
+lo conversado. Las reuniones existentes conservan sus preguntas y respuestas.
+No requiere migración adicional. La detección ocurre al confirmar la transcripción
+y completar el lote de IA; no implica reconocimiento instantáneo por palabra.

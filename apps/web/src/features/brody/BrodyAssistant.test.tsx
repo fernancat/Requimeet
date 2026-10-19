@@ -77,4 +77,11 @@ describe('Brody live interaction', () => {
     expect(screen.getByText('Guardé una respuesta clara. Podemos continuar.')).toBeTruthy();
   });
 
+  it('guides the host without requiring a question-performed button', async () => {
+    render(<BrodyAssistant {...props} />);
+    await screen.findByText('Pregunta primera');
+    expect(screen.queryByText('Ya la pregunté')).toBeNull();
+    expect(screen.getByText(/Haz esta pregunta con tus propias palabras/)).toBeTruthy();
+  });
+
 });

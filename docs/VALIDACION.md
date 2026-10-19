@@ -82,3 +82,17 @@ reales de reuniones. Los scripts reproducibles están documentados en INTEGRACIO
 - OpenRouter real con texto sintético: resolución automática persistida en
   PostgreSQL. Chromium mostró la respuesta guardada sin confirmación y permitió
   reabrirla con «Seguir aclarando», persistiendo ASKED. No se utilizó micrófono físico.
+
+## Entrevista sin marcación manual
+
+- 76 tests servidor y 54 frontend pasan. Builds de servidor y frontend correctos.
+- Casos nuevos: detección de pregunta del anfitrión sin respuesta, pregunta y
+  respuesta en el mismo lote con resolución automática, rechazo de atribución
+  al anfitrión para voz de invitado y ausencia del botón «Ya la pregunté».
+- Las reuniones nuevas reciben la pregunta de apertura al crearse; la prueba real
+  ingresa texto sintético como pregunta/respuesta de un solo anfitrión, sin llamar
+  al endpoint de cambio de estado de pregunta.
+- OpenRouter real completó detección y resolución sin botones usando texto sintético.
+  Chromium verificó que apareciera la siguiente pregunta, que la respuesta inicial
+  quedara RESOLVED y que no existiera «Ya la pregunté». No sustituye una prueba de
+  reconocimiento con micrófono físico.
