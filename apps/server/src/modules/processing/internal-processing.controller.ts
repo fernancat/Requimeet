@@ -4,7 +4,7 @@ import { RT_EVENTS } from '@requimeet/contracts';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RealtimeEmitter } from '../realtime/realtime.emitter';
 import { InternalSecretGuard } from './internal-secret.guard';
-import { RequirementsService } from '../requirements/requirements.service';
+import { TranscriptsService } from '../transcripts/transcripts.service';
 
 const RESULT_KINDS = ['demo', 'transcript-partial', 'transcript-final', 'analysis'];
 
@@ -13,7 +13,7 @@ export class InternalProcessingController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly emitter: RealtimeEmitter,
-    private readonly requirements: RequirementsService,
+    private readonly transcripts: TranscriptsService,
   ) {}
 
   /** Recibe resultados del processor y los retransmite a la reunion. */
@@ -35,11 +35,12 @@ export class InternalProcessingController {
     const meeting = await this.prisma.meeting.findUnique({
       where: { id: body.meetingId },
     });
-    if (!meeting || meeting.status === 'ended') {
+    if (!meeting || (meeting.status === 'ended' && (!meeting.endedAt || Date.now() - meeting.endedAt.getTime() > 30000))) {
       return { received: true, discarded: true };
     }
 
-    await this.requirements.saveFinalTranscript(body); 
+    const saved = await this.transcripts.save(body);
+    if (saved && (saved.revision !== (body.revision ?? 1) || saved.edited)) return { received: true }; 
     
     this.emitter.toMeeting(meeting.code, RT_EVENTS.serverProcessingResult, body);
     return { received: true };

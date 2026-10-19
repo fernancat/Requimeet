@@ -22,6 +22,7 @@ describe('applyTranscriptResult', () => {
     expect(segments).toEqual<TranscriptSegment[]>([
       {
         resultId: r.resultId,
+        revision: 1,
         participantId: null,
         text: 'hola',
         startMs: 0,
@@ -92,3 +93,10 @@ describe('applyTranscriptResult', () => {
     expect(segments[0].startMs).toBeNull();
   });
 });
+
+ it('ignora reintentos y revisiones atrasadas del mismo segmento', () => {
+   const final = { resultId: 'stable', meetingId: 'm', revision: 3, kind: 'transcript-final' as const, isFinal: true, createdAtMs: 1, payload: { text: 'final' } };
+   const state = applyTranscriptResult([], final);
+   expect(applyTranscriptResult(state, final)).toEqual(state);
+   expect(applyTranscriptResult(state, { ...final, revision: 2, kind: 'transcript-partial', isFinal: false })).toEqual(state);
+ });

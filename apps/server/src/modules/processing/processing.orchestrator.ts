@@ -90,12 +90,13 @@ export class ProcessingOrchestrator {
     this.logger.warn(`no se pudo iniciar el procesamiento de ${payload.code}; la reunion continua`);
   }
 
-  @OnEvent(DOMAIN_EVENTS.meetingEnded)
+  @OnEvent('meeting.closing')
   async onMeetingEnded(payload: MeetingLifecyclePayload): Promise<void> {
     if (!this.secret) return;
     try {
       await fetch(`${this.processorUrl}/sessions/${payload.meetingId}`, {
         method: 'DELETE',
+        signal: AbortSignal.timeout(15000),
         headers: { 'x-internal-secret': this.secret },
       });
     } catch (error) {

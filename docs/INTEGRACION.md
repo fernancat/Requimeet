@@ -45,3 +45,6 @@ con backoff al publicar resultados.
 - Los resultados son prescindibles por diseño (drop con log tras 3 intentos);
   si un módulo necesita durabilidad, debe persistirlos explícitamente en el
   server.
+
+## Transcripción persistente (20)
+Los resultados usan resultId estable y revision incremental. TranscriptsService guarda parciales y finales; solo los finales emiten transcript.confirmed. GET /meetings/:code/transcripts recupera páginas de 100 segmentos. El propietario puede corregir finales con PATCH y versión esperada. Se conserva original e historial. El cierre espera al processor hasta 15 segundos antes de borrar la sala; resultados tardíos se aceptan durante 30 segundos desde endedAt. El buffer de audio es acotado: una caída prolongada puede dejar fragmentos incompletos, nunca se presentan como confirmados.

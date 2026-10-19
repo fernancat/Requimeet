@@ -85,6 +85,7 @@ export class MeetingsService {
       where: { id: meeting.id },
       data: { status: 'ended', endedAt: new Date() },
     });
+    await this.events.emitAsync('meeting.closing', { meetingId: updated.id, code: updated.code, hostId: updated.hostId, status: 'ended' });
     this.logger.log(`reunion ${updated.code} finalizada`);
     this.events.emit(DOMAIN_EVENTS.meetingEnded, {
       meetingId: updated.id,

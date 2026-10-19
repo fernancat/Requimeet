@@ -24,9 +24,10 @@ export class ResultsClient {
               'x-internal-secret': this.internalSecret,
             },
             body: JSON.stringify(result),
+            signal: AbortSignal.timeout(5000),
           },
         );
-        if (res.ok) return;
+        if (res.ok && (await res.json() as { received?: boolean }).received) return;
         this.logger(`result ${result.resultId}: backend respondio ${res.status}`);
       } catch (error) {
         this.logger(`result ${result.resultId}: error de red (${String(error)})`);

@@ -109,6 +109,15 @@ export default function MeetingRoomPage({
     const s = createSocket(token);
     setSocket(s);
     s.on('connect', () => {
+      void (async () => {
+        let cursor: string | null = null;
+        do {
+          const page: { items: (TranscriptSegment & { id: string })[]; nextCursor: string | null } = await api(`/meetings/${code}/transcripts${cursor ? `?cursor=${cursor}` : ''}`, { token });
+          setTranscript(current => page.items.reduce((all, item) => applyTranscriptResult(all, { resultId: item.resultId, revision: item.revision, participantId: item.participantId ?? undefined, meetingId: code, kind: item.isFinal ? 'transcript-final' : 'transcript-partial', isFinal: item.isFinal, createdAtMs: 0, payload: { text: item.text, startMs: item.startMs, endMs: item.endMs } }), current));
+          cursor = page.nextCursor;
+        } while (cursor);
+      })().catch(() => setToast('No se pudo recuperar el historial de transcripción'));
+
       s.emit(RT_EVENTS.clientJoinMeetingChannel, { code }, (ack: SubscribeAck) => {
         if (ack?.role === 'host') {
           // La UI muestra controles; la autorizacion real la fuerza el servidor

@@ -201,6 +201,7 @@ export class MediaSession {
     publication: RemoteTrackPublication,
     participant: RemoteParticipant,
   ): void {
+    if (this.stopping) return;
     const sid = publication.sid ?? track.sid;
     if (!sid) return;
     const isAudio = publication.kind === TrackKind.KIND_AUDIO;
@@ -250,6 +251,7 @@ export class MediaSession {
   ): Promise<void> {
     try {
       for await (const frame of stream) {
+        if (this.stopping) break;
         const durationMs = (frame.samplesPerChannel / frame.sampleRate) * 1000;
         const mediaTimeMs = this.mediaTimeByTrack.get(sid) ?? 0;
         this.mediaTimeByTrack.set(sid, mediaTimeMs + durationMs);

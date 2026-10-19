@@ -3,7 +3,6 @@ import { resolve } from 'node:path';
 import type { MediaConsumer, ProcessingResult, StartProcessingRequest } from '@requimeet/contracts';
 import { createApp, SessionHandle } from './app';
 import { DeepgramConsumer } from './consumers/deepgram-consumer';
-import { DemoConsumer } from './consumers/demo-consumer';
 import { ResultsClient } from './results-client';
 import { MediaSession } from './session';
 
@@ -28,19 +27,13 @@ const results = new ResultsClient(SERVER_INTERNAL_URL, SECRET, log);
 
 function sessionFactory(request: StartProcessingRequest): SessionHandle {
   let session: MediaSession;
-  const consumers: MediaConsumer[] = [
-    new DemoConsumer(
-      request.meetingId,
-      (result: ProcessingResult) => void results.post(result),
-      () => session.droppedFrames(),
-    ),
-  ];
+  const consumers: MediaConsumer[] = [];
   if (DEEPGRAM_API_KEY) {
     consumers.push(
       new DeepgramConsumer(
         request.meetingId,
         DEEPGRAM_API_KEY,
-        (result: ProcessingResult) => void results.post(result),
+        (result: ProcessingResult) => results.post(result),
         log,
       ),
     );

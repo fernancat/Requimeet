@@ -11,7 +11,8 @@ export interface DeepgramSocket {
   send(data: string | Buffer): void;
   close(): void;
   on(event: 'message', listener: (data: { toString(): string }) => void): void;
-  on(event: 'error' | 'close', listener: () => void): void;
+  readonly readyState?: number;
+  on(event: 'open' | 'error' | 'close', listener: () => void): void;
 }
 
 export type DeepgramSocketFactory = (
@@ -29,6 +30,13 @@ interface DeepgramMessage {
 
 interface TrackStream {
   socket: DeepgramSocket;
+  segmentId: string;
+  revision: number;
+  pending: Buffer[];
+  offsetMs: number;
+  trackOffsetMs: number;
+  closing: boolean;
+  done?: () => void;
   track: TrackRef;
   lastPartialId: string | null;
   utteranceStartMs: number | null;
@@ -48,40 +56,44 @@ function defaultOpenSocket(url: string, headers: Record<string, string>): Deepgr
 
 export class DeepgramConsumer implements MediaConsumer {
   private readonly streams = new Map<string, TrackStream>();
+  private startedAtMs = 0;
+  private readonly retryAt = new Map<string, { at: number; attempts: number }>();
+  private readonly deliveries = new Set<Promise<unknown>>();
   private keepalive: NodeJS.Timeout | null = null;
 
   constructor(
     private readonly meetingId: string,
     private readonly apiKey: string,
-    private readonly emitResult: (result: ProcessingResult) => void,
+    private readonly emitResult: (result: ProcessingResult) => unknown,
     private readonly logger: (msg: string) => void = () => {},
     private readonly openSocket: DeepgramSocketFactory = defaultOpenSocket,
   ) {}
 
-  onSessionStart(): void {
+  onSessionStart(session?: { startedAtMs: number }): void {
+    this.startedAtMs = session?.startedAtMs ?? Date.now();
     this.keepalive = setInterval(() => this.pingIdleStreams(), KEEPALIVE_MS);
     this.keepalive.unref?.();
   }
 
-  onSessionEnd(): void {
+  async onSessionEnd(): Promise<void> {
     if (this.keepalive) {
       clearInterval(this.keepalive);
       this.keepalive = null;
     }
-    for (const stream of [...this.streams.values()]) {
-      this.closeStream(stream);
-    }
+    await Promise.all([...this.streams.values()].map(stream => this.closeStream(stream)));
+    await Promise.allSettled([...this.deliveries]);
   }
 
-  onTrackUnpublished(track: TrackRef): void {
+  async onTrackUnpublished(track: TrackRef): Promise<void> {
     const stream = this.streams.get(track.trackSid);
-    if (stream) this.closeStream(stream);
+    if (stream) await this.closeStream(stream);
   }
 
   onAudioFrame(frame: AudioFrame): void {
     const sid = frame.track.trackSid;
     let stream = this.streams.get(sid);
     if (!stream) {
+      if ((this.retryAt.get(sid)?.at ?? 0) > Date.now()) return;
       stream = this.openStream(frame);
       this.streams.set(sid, stream);
     }
@@ -91,7 +103,12 @@ export class DeepgramConsumer implements MediaConsumer {
       frame.samples.byteOffset,
       frame.samples.byteLength,
     );
-    stream.socket.send(bytes);
+    if (stream.closing) return;
+    if (stream.socket.readyState === undefined || stream.socket.readyState === WebSocket.OPEN) stream.socket.send(bytes);
+    else {
+      if (stream.pending.length >= 50) { stream.pending.shift(); this.logger('Deepgram: buffer lleno; audio descartado'); }
+      stream.pending.push(Buffer.from(bytes));
+    }
   }
 
   private openStream(frame: AudioFrame): TrackStream {
@@ -110,7 +127,9 @@ export class DeepgramConsumer implements MediaConsumer {
       Authorization: `Token ${this.apiKey}`,
     });
     const stream: TrackStream = {
-      socket,
+      socket, segmentId: randomUUID(), revision: 0, pending: [], closing: false,
+      offsetMs: this.startedAtMs ? Math.max(0, frame.receivedAtMs - this.startedAtMs) : 0,
+      trackOffsetMs: frame.mediaTimeMs,
       track: frame.track,
       lastPartialId: null,
       utteranceStartMs: null,
@@ -119,8 +138,22 @@ export class DeepgramConsumer implements MediaConsumer {
       lastFrameAtMs: Date.now(),
     };
     socket.on('message', (data) => this.handleMessage(stream, data.toString()));
-    socket.on('error', () => this.closeStream(stream));
-    socket.on('close', () => this.streams.delete(stream.track.trackSid));
+    socket.on('open', () => {
+      this.retryAt.delete(frame.track.trackSid);
+      for (const bytes of stream.pending.splice(0)) socket.send(bytes);
+      if (stream.closing) socket.send('{"type":"CloseStream"}');
+    });
+    socket.on('error', () => { try { socket.close(); } catch { /* already closed */ } });
+    socket.on('close', () => {
+      this.emitFinal(stream);
+      if (this.streams.get(stream.track.trackSid) === stream) this.streams.delete(stream.track.trackSid);
+      if (!stream.closing) {
+        const attempts = (this.retryAt.get(stream.track.trackSid)?.attempts ?? 0) + 1;
+        this.retryAt.set(stream.track.trackSid, { attempts, at: Date.now() + Math.min(1000 * 2 ** (attempts - 1), 10000) });
+        this.logger('Deepgram: conexión interrumpida; se reintentará con el próximo audio');
+      }
+      stream.done?.();
+    });
     this.logger(
       `sesion ${this.meetingId}: stream deepgram abierto (${frame.track.trackSid})`,
     );
@@ -162,9 +195,10 @@ export class DeepgramConsumer implements MediaConsumer {
 
   private emitPartial(stream: TrackStream, text: string): void {
     if (!text) return;
-    const resultId = randomUUID();
-    this.emitResult({
+    const resultId = stream.segmentId;
+    this.deliver({
       resultId,
+      revision: ++stream.revision,
       replacesResultId: stream.lastPartialId ?? undefined,
       meetingId: this.meetingId,
       participantId: stream.track.participantId,
@@ -174,8 +208,10 @@ export class DeepgramConsumer implements MediaConsumer {
       createdAtMs: Date.now(),
       payload: {
         text,
-        startMs: stream.utteranceStartMs,
-        endMs: stream.utteranceEndMs,
+        startMs: stream.utteranceStartMs === null ? null : stream.offsetMs + stream.utteranceStartMs,
+        trackStartMs: stream.utteranceStartMs === null ? null : stream.trackOffsetMs + stream.utteranceStartMs,
+        endMs: stream.utteranceEndMs === null ? null : stream.offsetMs + stream.utteranceEndMs,
+        trackEndMs: stream.utteranceEndMs === null ? null : stream.trackOffsetMs + stream.utteranceEndMs,
       },
     });
     stream.lastPartialId = resultId;
@@ -184,8 +220,9 @@ export class DeepgramConsumer implements MediaConsumer {
   private emitFinal(stream: TrackStream): void {
     const text = stream.finalChunks.join(' ');
     if (text) {
-      this.emitResult({
-        resultId: randomUUID(),
+      this.deliver({
+        resultId: stream.segmentId,
+        revision: ++stream.revision,
         replacesResultId: stream.lastPartialId ?? undefined,
         meetingId: this.meetingId,
         participantId: stream.track.participantId,
@@ -195,30 +232,46 @@ export class DeepgramConsumer implements MediaConsumer {
         createdAtMs: Date.now(),
         payload: {
           text,
-          startMs: stream.utteranceStartMs,
-          endMs: stream.utteranceEndMs,
+          startMs: stream.utteranceStartMs === null ? null : stream.offsetMs + stream.utteranceStartMs,
+        trackStartMs: stream.utteranceStartMs === null ? null : stream.trackOffsetMs + stream.utteranceStartMs,
+          endMs: stream.utteranceEndMs === null ? null : stream.offsetMs + stream.utteranceEndMs,
+        trackEndMs: stream.utteranceEndMs === null ? null : stream.trackOffsetMs + stream.utteranceEndMs,
         },
       });
     }
+    stream.segmentId = randomUUID();
+    stream.revision = 0;
     stream.lastPartialId = null;
     stream.finalChunks = [];
     stream.utteranceStartMs = null;
     stream.utteranceEndMs = null;
   }
 
-  private closeStream(stream: TrackStream): void {
-    this.streams.delete(stream.track.trackSid);
-    try {
-      stream.socket.close();
-    } catch {
-      return;
-    }
+  private deliver(result: ProcessingResult): void {
+    const promise = Promise.resolve(this.emitResult(result));
+    this.deliveries.add(promise);
+    void promise.finally(() => this.deliveries.delete(promise)).catch(() => this.logger('No se pudo entregar transcripción'));
+  }
+
+  private async closeStream(stream: TrackStream): Promise<void> {
+    if (stream.closing) return;
+    stream.closing = true;
+    await new Promise<void>(resolve => {
+      const timer = setTimeout(() => { this.emitFinal(stream); stream.socket.close(); resolve(); }, 5000);
+      stream.done = () => { clearTimeout(timer); resolve(); };
+      try {
+        if (stream.socket.readyState === undefined) { this.emitFinal(stream); stream.socket.close(); stream.done(); }
+        else if (stream.socket.readyState === WebSocket.OPEN) stream.socket.send('{"type":"CloseStream"}');
+        else if (stream.socket.readyState === WebSocket.CLOSED) stream.done();
+      } catch { stream.done(); }
+    });
+    if (this.streams.get(stream.track.trackSid) === stream) this.streams.delete(stream.track.trackSid);
   }
 
   private pingIdleStreams(): void {
     const now = Date.now();
     for (const stream of this.streams.values()) {
-      if (now - stream.lastFrameAtMs >= KEEPALIVE_MS) {
+      if (!stream.closing && (stream.socket.readyState === undefined || stream.socket.readyState === WebSocket.OPEN) && now - stream.lastFrameAtMs >= KEEPALIVE_MS) {
         stream.socket.send('{"type":"KeepAlive"}');
       }
     }

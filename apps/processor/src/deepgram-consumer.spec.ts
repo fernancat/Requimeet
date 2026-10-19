@@ -191,3 +191,28 @@ describe('DeepgramConsumer', () => {
     expect(() => sockets[0].receive('no-json')).not.toThrow();
   });
 });
+
+it('espera OPEN, conserva el último final al cerrar y entrega revisiones estables', async () => {
+  let readyState = 0;
+  const listeners: Record<string, (...args: any[]) => void> = {};
+  const sent: (string | Buffer)[] = [];
+  const socket: DeepgramSocket = {
+    get readyState() { return readyState; },
+    on: (event: string, fn: any) => { listeners[event] = fn; },
+    send: data => { sent.push(data); if (data === '{"type":"CloseStream"}') {
+      listeners.message(transcriptMessage('final pendiente', { is_final: true }));
+      readyState = 3; listeners.close();
+    } },
+    close: () => { readyState = 3; listeners.close(); },
+  };
+  const results: ProcessingResult[] = [];
+  const consumer = new DeepgramConsumer('m', 'test', r => results.push(r), () => {}, () => socket);
+  consumer.onAudioFrame(audioFrame('p', 'sid'));
+  expect(sent).toHaveLength(0);
+  readyState = 1; listeners.open();
+  expect(sent[0]).toBeInstanceOf(Buffer);
+  listeners.message(transcriptMessage('parcial'));
+  await consumer.onSessionEnd();
+  expect(results.at(-1)).toMatchObject({ isFinal: true, resultId: results[0].resultId, payload: { text: 'final pendiente' } });
+  expect(results.at(-1)!.revision).toBeGreaterThan(results[0].revision!);
+});
