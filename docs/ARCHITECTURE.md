@@ -206,3 +206,24 @@ control de revisión y confirmación para incertidumbre real. El perfil de anál
 forma parte de la huella del trabajo (`policyVersion`). Un análisis explícito puede
 revisitar finales ya analizados cuando queda una pregunta ASKED sin respuesta;
 la misma huella sigue evitando duplicados.
+
+
+## Resultados progresivos de Brody
+
+El análisis en vivo utiliza SSE en la misma llamada a DeepSeek V4 Flash. El prompt
+ordena detección de preguntas, respuestas, próxima pregunta y requerimientos. Solo
+se publican arrays JSON completos: cada unidad pasa el esquema, validación de
+fuentes/citas/revisiones y transacción antes del evento Socket.IO. La interfaz puede
+avanzar mientras continúa la extracción de requerimientos. Nunca muestra tokens
+incompletos como decisiones.
+
+Los identificadores se sustituyen por alias reversibles únicamente durante el
+transporte; la transcripción, contexto, decisiones humanas y versiones permanecen
+intactos. Los alias se expanden antes de validar referencias. Los documentos
+mantienen su generación habitual sin streaming.
+
+Las detecciones persistidas por el mismo trabajo pueden continuar en el siguiente
+fragmento. El control de versión impide duplicar respuestas o sobrescribir cambios
+humanos. Un corte conserva unidades ya guardadas y reintenta el trabajo; solamente
+el resultado final válido marca los segmentos como analizados. No se añaden
+llamadas paralelas ni se cambia el modelo.

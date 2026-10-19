@@ -111,3 +111,22 @@ reales de reuniones. Los scripts reproducibles están documentados en INTEGRACIO
 - Se añadió cobertura de revisión explícita de preguntas abiertas sobre segmentos
   ya analizados. El frontend deja de inferir insuficiencia de información solamente
   porque terminó un lote sin respuesta propuesta.
+
+
+## Resultados progresivos y contexto íntegro
+
+- Reejecución real y de solo lectura del mismo lote persistido de seis segmentos:
+  respuesta completa a los 4,946 ms; siguiente pregunta a los 6,206 ms; resultado
+  total a los 8,687 ms. Incluye consulta de catálogo, excluye captura de audio,
+  cola y renderizado en navegador. La medición anterior fue 11,791 ms hasta recibir
+  todo el resultado. Son muestras individuales, no una garantía ni percentiles.
+- Se obtuvieron dos respuestas clasificadas clear, con tres y dos fuentes; todas
+  las citas se verificaron contra los segmentos originales. El input pasó de
+  3,695 a 2,677 caracteres únicamente mediante alias de IDs, sin resumir ni
+  eliminar contexto. Se mantuvo deepseek/deepseek-v4-flash.
+- Cobertura: SSE fragmentado byte a byte y Unicode, comentarios del proveedor,
+  arrays completos, escape de cadenas, error/truncamiento/cierre inesperado,
+  alias reversibles, persistencia anticipada, pregunta/respuesta en distintos
+  fragmentos y reintento tras corte sin duplicación de historial.
+- Esta comprobación no sustituye una medición de extremo a extremo con micrófono.
+- Suite completa del servidor: 18 suites y 85 tests aprobados; build correcto.

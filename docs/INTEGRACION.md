@@ -161,3 +161,12 @@ Recargar el frontend. Para una pregunta que quedó sin respuesta antes de este
 ajuste, «Analizar ahora» permite revisitar el texto confirmado; también se sigue
 analizando al hablar. El tiempo total depende de la pausa de voz, cola y proveedor:
 no se garantiza una latencia fija. Los documentos mantienen el perfil anterior.
+
+
+Brody publica ahora la respuesta y la siguiente pregunta antes de completar la
+extracción de requerimientos. No necesita migraciones ni configuración adicional.
+El backend actualiza la sala con eventos de cambios persistidos; el estado de
+análisis puede seguir activo mientras concluye el resto del lote. Ante un corte,
+las respuestas ya guardadas se conservan y el trabajo se reintenta sin duplicarlas.
+El protocolo del proveedor está documentado en
+https://openrouter.ai/docs/api-reference/streaming.
