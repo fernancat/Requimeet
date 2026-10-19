@@ -1,3 +1,4 @@
+import { confirmLeaving } from '../features/workspace/useResource';
 import QuestionsPanel from '../features/workspace/QuestionsPanel';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -65,7 +66,7 @@ export default function MeetingRoomPage({
   const navigate = useNavigate();
   const hostToken = getHostToken();
   const guest = getGuestSession(code);
-  const token = hostToken ?? guest?.token ?? null;
+  const token = role === 'participant' && guest ? guest.token : hostToken ?? guest?.token ?? null;
   const selfName = hostToken ? '' : (guest?.displayName ?? 'Invitado');
 
   const [exitReason, setExitReason] = useState<ExitReason | null>(null);
@@ -111,15 +112,16 @@ export default function MeetingRoomPage({
     if (!token) return;
     const s = createSocket(token);
     setSocket(s);
-    s.on('connect', () => {
-      void (async () => {
+    const loadHistory = async () => {
         let cursor: string | null = null;
         do {
           const page: { items: (TranscriptSegment & { id: string })[]; nextCursor: string | null } = await api(`/meetings/${code}/transcripts${cursor ? `?cursor=${cursor}` : ''}`, { token });
           setTranscript(current => page.items.reduce((all, item) => applyTranscriptResult(all, { resultId: item.resultId, revision: item.revision, participantId: item.participantId ?? undefined, meetingId: code, kind: item.isFinal ? 'transcript-final' : 'transcript-partial', isFinal: item.isFinal, createdAtMs: 0, payload: { text: item.text, startMs: item.startMs, endMs: item.endMs } }), current));
           cursor = page.nextCursor;
         } while (cursor);
-      })().catch(() => setToast('No se pudo recuperar el historial de transcripción'));
+    };
+    s.on('connect', () => {
+      void loadHistory().catch(() => setToast('No se pudo recuperar el historial de transcripción'));
 
       s.emit(RT_EVENTS.clientJoinMeetingChannel, { code }, (ack: SubscribeAck) => {
         if (ack?.role === 'host') {
@@ -132,7 +134,7 @@ export default function MeetingRoomPage({
         }
       });
     });
-    s.on('workspace:changed', () => setRequirementsVersion(n => n + 1));
+    s.on('workspace:changed', (event: { resource: string }) => { setRequirementsVersion(n => n + 1); if (event.resource === 'transcripts') void loadHistory().catch(() => setToast('No se pudo actualizar la transcripción')); });
     s.on(RT_EVENTS.serverParticipants, (payload: ParticipantsPayload) => {
       setParticipants(payload.participants);
     });
@@ -263,6 +265,7 @@ export default function MeetingRoomPage({
   }
 
   async function onEndMeeting() {
+    if (!confirmLeaving()) return;
     setConfirmEnd(false);
     try {
       await api(`/meetings/${code}/end`, { method: 'POST', token });
@@ -294,7 +297,7 @@ export default function MeetingRoomPage({
           <p className="status-banner warn">{room.error}</p>
           <div className="actions">
             <button onClick={room.retry}>Reintentar</button>
-            <button className="secondary" onClick={() => void room.leave()}>
+            <button className="secondary" onClick={() => { if (confirmLeaving()) void room.leave(); }}>
               Salir
             </button>
           </div>
@@ -422,7 +425,7 @@ export default function MeetingRoomPage({
           />
         )}
                 {panel === 'transcript' && (
-          <TranscriptPanel segments={transcript} participants={participants} />
+          <TranscriptPanel segments={[...transcript].sort((a, b) => (a.startMs ?? 0) - (b.startMs ?? 0))} participants={participants} />
         )}
 
         <div className="panel-content" hidden={panel !== 'questions'}>{visited.has('questions') && token && <QuestionsPanel code={code} token={token} canEdit={isHost} refreshVersion={requirementsVersion} />}</div>
@@ -464,7 +467,7 @@ export default function MeetingRoomPage({
               Finalizar
             </button>
           ))}
-        <button className="secondary" onClick={() => void room.leave()}>
+        <button className="secondary" onClick={() => { if (confirmLeaving()) void room.leave(); }}>
           Salir
         </button>
       </footer>

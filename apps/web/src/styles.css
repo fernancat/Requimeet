@@ -816,7 +816,7 @@ legend { padding: 0 8px; font-weight: 600; }
 .document-item { margin-bottom: 24px; }
 .document-item small { display: block; overflow-wrap: anywhere; margin: 8px 0; color: var(--text-dim); }
 .entity-diagram { width: 100%; overflow: auto; background: white; border-radius: 8px; margin: 20px 0; }
-.entity-diagram img { display: block; max-width: none; width: max(100%, 680px); height: auto; }
+.entity-diagram img { display: block; max-width: none; width: auto; min-width: min(100%, 340px); height: auto; max-height: 640px; }
 .meeting-list li { align-items: flex-start; flex-wrap: wrap; }
 .meeting-list li > span { overflow-wrap: anywhere; }
 .meeting-list .actions { margin-top: 0; }

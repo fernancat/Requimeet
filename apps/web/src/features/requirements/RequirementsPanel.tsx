@@ -65,7 +65,8 @@ function RequirementCard({
   const [text, setText] = useState(requirement.text);
   const [status, setStatus] = useState(requirement.status);
   const [editVersion, setEditVersion] = useState(requirement.version);
-  const dirty = text !== requirement.text || status !== requirement.status;
+  const [baseline, setBaseline] = useState(requirement);
+  const dirty = text !== baseline.text || status !== baseline.status;
   useUnsaved(dirty);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -74,12 +75,11 @@ function RequirementCard({
 
   useEffect(() => {
     if (!dirty) {
+      setBaseline(requirement);
       setEditVersion(requirement.version);
       setStatus(requirement.status);
       setText(requirement.text);
-    } else if (requirement.status === 'APPROVED') {
-      setText(requirement.text);
-      setStatus('APPROVED');
+
     }
   }, [requirement.text, requirement.status, requirement.version]);
 
@@ -117,6 +117,7 @@ function RequirementCard({
         },
       );
 
+      setBaseline(updated);
       setEditVersion(updated.version);
       setText(updated.text);
       setStatus(updated.status);
@@ -139,7 +140,7 @@ function RequirementCard({
       <label>
         Requerimiento
         <textarea
-          value={isApproved ? requirement.text : text}
+          value={text}
           maxLength={5000}
           rows={4}
           disabled={saving || isApproved || !canEdit}
@@ -159,7 +160,7 @@ function RequirementCard({
       <label>
         Estado
         <select
-          value={isApproved ? 'APPROVED' : status}
+          value={status}
           disabled={saving || isApproved || !canEdit}
           onChange={(event) => {
             setStatus(event.target.value as RequirementStatus);
@@ -186,6 +187,8 @@ function RequirementCard({
         </button>
       )}
 
+      {dirty && requirement.version !== editVersion && <p role="alert">Hay una versión nueva. Tu borrador se conserva; compáralo antes de recargar.</p>}
+      {dirty && <button className="secondary" onClick={() => { if (window.confirm('¿Descartar tu borrador y cargar la versión guardada?')) { setBaseline(requirement); setEditVersion(requirement.version); setText(requirement.text); setStatus(requirement.status); } }}>Descartar borrador</button>}
       {error && <p role="alert">{error}</p>}
 
       {canEdit && <div className="actions">
@@ -228,6 +231,7 @@ export default function RequirementsPanel({
   canEdit = false,
 }: RequirementsPanelProps) {
   const [manual, setManual] = useState('');
+  useUnsaved(Boolean(manual.trim()));
   const [showDiscarded, setShowDiscarded] = useState(false);
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [loading, setLoading] = useState(true);
