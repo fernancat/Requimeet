@@ -1,3 +1,4 @@
+import { MeetingAccessService } from './meeting-access.service';
 import { Module } from '@nestjs/common';
 import { IdentityModule } from '../identity/identity.module';
 import { LivekitModule } from '../livekit/livekit.module';
@@ -12,12 +13,13 @@ import { MeetingsService } from './meetings.service';
   imports: [IdentityModule, LivekitModule],
   controllers: [MeetingsController],
   providers: [
+    MeetingAccessService,
     MeetingsService,
     MeetingParticipantsService,
     CallerResolver,
     JoinRequestRateLimiter,
     JoinRequestThrottleGuard,
   ],
-  exports: [MeetingsService, CallerResolver],
+  exports: [MeetingsService, CallerResolver, MeetingAccessService],
 })
 export class MeetingsModule {}

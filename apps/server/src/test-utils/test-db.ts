@@ -10,6 +10,8 @@ export function createTestPrisma(): PrismaClient {
 }
 
 export async function cleanDb(prisma: PrismaClient): Promise<void> {
+  await prisma.requirement.deleteMany();
+  await prisma.transcriptSegment.deleteMany();
   await prisma.chatMessage.deleteMany();
   await prisma.participant.deleteMany();
   await prisma.joinRequest.deleteMany();

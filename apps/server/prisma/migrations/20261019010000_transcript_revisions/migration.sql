@@ -1,0 +1,5 @@
+ALTER TABLE "TranscriptSegment" ADD COLUMN "originalText" TEXT, ADD COLUMN "revision" INTEGER NOT NULL DEFAULT 1,
+ADD COLUMN "isFinal" BOOLEAN NOT NULL DEFAULT true, ADD COLUMN "edited" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN "trackStartMs" DOUBLE PRECISION, ADD COLUMN "trackEndMs" DOUBLE PRECISION,
+ADD COLUMN "history" JSONB NOT NULL DEFAULT '[]';
+UPDATE "TranscriptSegment" SET "originalText" = "text";

@@ -104,6 +104,13 @@ model TranscriptSegment {
   participantId String?
   trackSid      String?
   text          String
+  originalText  String?
+  revision      Int      @default(1)
+  isFinal       Boolean  @default(true)
+  edited        Boolean  @default(false)
+  trackStartMs  Float?
+  trackEndMs    Float?
+  history       Json     @default("[]")
   startMs       Float?
   endMs         Float?
   createdAtMs   Float

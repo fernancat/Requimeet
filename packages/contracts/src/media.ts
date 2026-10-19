@@ -102,6 +102,7 @@ export interface MediaConsumer {
  */
 export interface ProcessingResult {
   resultId: string;
+  revision?: number;
   /** Si existe, este resultado corrige/reemplaza a uno anterior. */
   replacesResultId?: string;
   meetingId: string;
