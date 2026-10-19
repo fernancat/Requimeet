@@ -138,4 +138,59 @@ describe('respuestas habladas de Brody', () => {
     expect(again.job?.id).not.toBe(queued.job?.id); // version changed with the saved proposal
   });
 
+  it('publica una respuesta validada antes de terminar la extracción y no duplica el historial al finalizar', async () => {
+    const { meeting, question, segment, caller } = await setup();
+    const result = { askedQuestions: [], requirements: [], questions: [], answerSuggestions: [{ questionId: question.id, text: 'Administradores.', sourceIds: [segment.id], clarity: 'clear', quotes: [{ sourceId: segment.id, text: segment.text }] }] };
+    generate.mockImplementation(async (_prompt, _input, options) => {
+      await options.onPartial({ askedQuestions: [], answerSuggestions: result.answerSuggestions });
+      const saved = await prisma.question.findUniqueOrThrow({ where: { id: question.id } });
+      expect(saved.status).toBe('RESOLVED');
+      expect((await prisma.transcriptSegment.findUniqueOrThrow({ where: { id: segment.id } })).analyzedRevision).toBe(0);
+      return result;
+    });
+    await ai.analyze(meeting.code, caller); await ai.processNext();
+    const saved = await prisma.question.findUniqueOrThrow({ where: { id: question.id } });
+    expect(saved.version).toBe(question.version + 1);
+    expect((await prisma.transcriptSegment.findUniqueOrThrow({ where: { id: segment.id } })).analyzedRevision).toBe(segment.revision);
+  });
+  it('continúa una detección publicada por el mismo trabajo y luego guarda la respuesta', async () => {
+    const { meeting, question, segment, caller } = await setup(false);
+    const text = '¿Quién aprueba? Los administradores.';
+    await prisma.transcriptSegment.update({ where: { id: segment.id }, data: { text } });
+    const askedQuestions = [{ questionId: question.id, sourceId: segment.id, quote: '¿Quién aprueba?' }];
+    const answerSuggestions = [{ questionId: question.id, text: 'Los administradores.', sourceIds: [segment.id], clarity: 'clear', quotes: [{ sourceId: segment.id, text: 'Los administradores.' }] }];
+    generate.mockImplementation(async (_prompt, _input, options) => {
+      await options.onPartial({ askedQuestions });
+      expect((await prisma.question.findUniqueOrThrow({ where: { id: question.id } })).status).toBe('ASKED');
+      await options.onPartial({ askedQuestions, answerSuggestions });
+      return { askedQuestions, answerSuggestions, requirements: [], questions: [] };
+    });
+    await ai.analyze(meeting.code, caller); await ai.processNext();
+    expect((await prisma.question.findUniqueOrThrow({ where: { id: question.id } })).status).toBe('RESOLVED');
+  });
+
+  it('conserva la respuesta publicada tras un corte y reintenta sin duplicar su historial', async () => {
+    const { meeting, question, segment, caller } = await setup();
+    const result = { askedQuestions: [], requirements: [], questions: [], answerSuggestions: [{ questionId: question.id, text: 'Administradores.', sourceIds: [segment.id], clarity: 'clear', quotes: [{ sourceId: segment.id, text: segment.text }] }] };
+    generate.mockImplementationOnce(async (_prompt, _input, options) => {
+      await options.onPartial(result);
+      throw new Error('Stream interrumpido');
+    }).mockImplementationOnce(async (_prompt, _input, options) => {
+      await options.onPartial(result);
+      return result;
+    });
+    const { job } = await ai.analyze(meeting.code, caller);
+    await ai.processNext();
+    const published = await prisma.question.findUniqueOrThrow({ where: { id: question.id } });
+    expect(published.status).toBe('RESOLVED');
+    expect((await prisma.aiJob.findUniqueOrThrow({ where: { id: job!.id } })).status).toBe('queued');
+    expect((await prisma.transcriptSegment.findUniqueOrThrow({ where: { id: segment.id } })).analyzedRevision).toBe(0);
+    await ai.processNext();
+    const saved = await prisma.question.findUniqueOrThrow({ where: { id: question.id } });
+    expect(saved.version).toBe(published.version);
+    expect(saved.history).toEqual(published.history);
+    expect((await prisma.aiJob.findUniqueOrThrow({ where: { id: job!.id } })).status).toBe('completed');
+    expect((await prisma.transcriptSegment.findUniqueOrThrow({ where: { id: segment.id } })).analyzedRevision).toBe(segment.revision);
+  });
+
 });

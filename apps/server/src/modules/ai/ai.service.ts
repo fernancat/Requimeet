@@ -1,3 +1,4 @@
+import { compactIds } from './compact-ids';
 import { LIVE_ANALYSIS_PROMPT } from './live-analysis.prompt';
 import {
   Injectable,
@@ -180,7 +181,7 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
       orderBy: { createdAt: 'desc' },
     });
     const input = {
-      policyVersion: 'brody-live-v2',
+      policyVersion: 'brody-live-v3',
       segments,
       context: context.slice().reverse().map(s => ({ id: s.id, text: s.text.slice(0, 3000), revision: s.revision, createdAtMs: s.createdAtMs, speakerRole: s.participant?.role })),
       requirements,
@@ -256,13 +257,24 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
   }
   private async runAnalysis(job: AiJob) {
     const input = job.input as unknown as AnalysisInput;
-    const result = analysisSchema.parse(
+    const wire = compactIds(input);
+    const result = analysisSchema.parse(wire.expand(
       await this.router.generate(
         LIVE_ANALYSIS_PROMPT,
-        input,
-        { live: true },
+        wire.input,
+        { live: true, onPartial: async arrays => {
+          // A complete array is an independently validated unit, never token text.
+          if (!Object.hasOwn(arrays, 'askedQuestions')) return;
+          const ready = analysisSchema.parse(wire.expand({ questions: [], ...arrays, requirements: [] }));
+          await this.persistAnalysis(job, input, ready, false);
+          await this.notify(job.meetingId);
+        } },
       ),
-    );
+    ));
+    await this.persistAnalysis(job, input, result, true);
+    return result;
+  }
+  private async persistAnalysis(job: AiJob, input: AnalysisInput, result: ReturnType<typeof analysisSchema.parse>, final: boolean) {
     const allowed = new Set(
       [...input.segments, ...input.context].map((s) => s.id),
     );
@@ -296,7 +308,12 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
         const source = allSegments.find(s => s.id === detected.sourceId)!;
         const valid = await tx.transcriptSegment.findFirst({ where: { id: source.id, meetingId: job.meetingId, revision: source.revision, isFinal: true } });
         const previous = await tx.question.findUnique({ where: { id } });
-        if (!valid || !previous || previous.version !== question.version || previous.status !== 'PENDING') continue;
+        if (!valid || !previous) continue;
+        if (previous.status === 'ASKED' && previous.version === question.version + 1 && Array.isArray(previous.history) && previous.history.some(entry =>
+          entry && typeof entry === 'object' && !Array.isArray(entry) && entry.jobId === job.id && entry.event === 'question-detected')) {
+          detectedVersions.set(id, previous.version); continue;
+        }
+        if (previous.version !== question.version || previous.status !== 'PENDING') continue;
         const changed = await tx.question.updateMany({ where: { id, version: question.version, status: 'PENDING', answer: '' },
           data: { status: 'ASKED', askedAt: new Date(detected.at), version: { increment: 1 }, history: [
             ...(Array.isArray(previous.history) ? previous.history : []),
@@ -363,7 +380,7 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
         })),
         skipDuplicates: true,
       });
-      for (const segment of input.segments)
+      if (final) for (const segment of input.segments)
         await tx.transcriptSegment.updateMany({
           where: { id: segment.id, revision: segment.revision },
           data: { analyzedRevision: segment.revision },
