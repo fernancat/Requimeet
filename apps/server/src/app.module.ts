@@ -1,3 +1,4 @@
+import { QuestionsModule } from './modules/questions/questions.module';
 import { AiModule } from './modules/ai/ai.module';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
@@ -22,6 +23,7 @@ import { RequirementsModule } from './modules/requirements/requirements.module';
     ProcessingModule,
     RequirementsModule,
     AiModule,
+    QuestionsModule,
   ],
 })
 export class AppModule {}

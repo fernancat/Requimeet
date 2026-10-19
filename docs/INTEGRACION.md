@@ -51,3 +51,6 @@ Los resultados usan resultId estable y revision incremental. TranscriptsService 
 
 ## IA incremental (22)
 AiModule escucha transcript.confirmed con agrupación de 1.5 segundos. PostgreSQL conserva AiJob y analyzedRevision; el worker de un único servidor toma trabajos cada 2 segundos, sin llamadas LLM en el ingreso multimedia. Reinicios recuperan trabajos pendientes, máximo tres intentos y timeout de 45 segundos por generación. La configuración verifica el ID exacto deepseek/deepseek-v4-flash en OpenRouter. Las respuestas JSON se validan y solo aceptan fuentes de la reunión; ninguna propuesta sobrescribe texto humano. No ejecutar múltiples instancias del worker sin implementar leases distribuidos.
+
+## Preguntas (23)
+GET/PATCH /meetings/:code/questions expone preguntas con categoría, prioridad, motivo y fuentes. Resolver requiere respuesta o evidencia final de la misma reunión. La edición exige versión esperada y registra historial. El panel actualiza al recibir workspace:changed y recupera por REST; Analizar ahora reutiliza el trabajo activo.
