@@ -4,16 +4,18 @@ import type { Requirement } from '../requirements/requirements-api';
 import { updateRequirement } from '../requirements/requirements-api';
 import { api } from '../../lib/api';
 import { useResource, useUnsaved } from '../workspace/useResource';
+import { useQuietSnapshot } from './useQuietSnapshot';
 import { nextQuestion } from './brody-queue';
 const BrodyAvatar = lazy(() => import('./BrodyAvatar'));
 
-export default function BrodyAssistant({ code, token, canEdit, refreshVersion, interrupted, connected, transcriptText, micOn = true }: {
+export default function BrodyAssistant({ code, token, canEdit, refreshVersion, interrupted, connected, transcriptText, micOn = true, speaking = false }: {
   code: string; token: string; canEdit: boolean; refreshVersion: number;
-  interrupted: boolean; connected: boolean; transcriptText?: string; micOn?: boolean;
+  interrupted: boolean; connected: boolean; transcriptText?: string; micOn?: boolean; speaking?: boolean;
 }) {
   const questions = useResource<QuestionDto[]>(`/meetings/${code}/questions`, token, refreshVersion);
   const requirements = useResource<Requirement[]>(`/meetings/${code}/requirements`, token, refreshVersion);
   const analysis = useResource<AnalysisStatus>(`/meetings/${code}/analysis`, token, refreshVersion);
+  const visibleQuestions = useQuietSnapshot(questions.data, speaking);
   const detectionsRef = useRef<HTMLElement>(null);
   const [currentId, setCurrentId] = useState<string>();
   const [deferred, setDeferred] = useState<string[]>([]);
@@ -22,14 +24,14 @@ export default function BrodyAssistant({ code, token, canEdit, refreshVersion, i
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-  const current = nextQuestion(questions.data ?? [], deferred, currentId);
+  const current = nextQuestion(visibleQuestions.data ?? [], deferred, currentId);
   useEffect(() => { setCurrentId(current?.id); }, [current?.id]);
   useUnsaved(Object.values(answers).some(answer => answer.trim().length > 0));
   const working = analysis.data?.jobs.some(j => j.status === 'running' || j.status === 'queued');
   const failed = analysis.data?.jobs[0]?.status === 'failed';
   const openCount = questions.data?.filter(q => q.status === 'PENDING' || q.status === 'ASKED').length ?? 0;
   const detected = (requirements.data ?? []).filter(r => !r.discarded).slice().reverse();
-  const automaticAnswers = (questions.data ?? []).filter(q => q.automaticResolution && q.status === 'RESOLVED').slice().reverse();
+  const automaticAnswers = (visibleQuestions.data ?? []).filter(q => q.automaticResolution && q.status === 'RESOLVED').slice().reverse();
   const suggestion = current?.answerSuggestion;
   async function correctAutomatic(item: QuestionDto, reopen = false) {
     setBusy(true); setError('');
@@ -76,8 +78,8 @@ export default function BrodyAssistant({ code, token, canEdit, refreshVersion, i
     catch (e) { setError(e instanceof Error ? e.message : 'No se pudo aprobar'); void requirements.reload(); }
     finally { setBusy(false); }
   }
-  const state = interrupted ? 'Audio interrumpido' : !connected ? 'Conectando a la reunión' : !analysis.data ? 'Conectando con el asistente' : !analysis.data.enabled ? 'IA no disponible' : working ? 'Analizando lo conversado…' : current ? 'Tengo una sugerencia' : 'Esperando nuevos resultados';
-  return <section className="brody-assistant" aria-label="Brody, asistente en vivo">
+  const state = visibleQuestions.holding ? 'Te escucho; seguimos cuando hagas una pausa' : interrupted ? 'Audio interrumpido' : !connected ? 'Conectando a la reunión' : !analysis.data ? 'Conectando con el asistente' : !analysis.data.enabled ? 'IA no disponible' : working ? 'Analizando lo conversado…' : current ? 'Tengo una sugerencia' : 'Esperando nuevos resultados';
+  return <section className="brody-assistant" data-speaking={speaking} data-turn-held={visibleQuestions.holding} aria-label="Brody, asistente en vivo">
     <header className="brody-heading"><div><h2>Brody</h2><span role="status">{state}</span></div><span className="brody-live">En vivo</span></header>
     <div className="brody-conversation">
       <Suspense fallback={<div className="brody-avatar" />}><BrodyAvatar /></Suspense>

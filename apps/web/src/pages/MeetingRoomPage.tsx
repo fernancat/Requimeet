@@ -389,7 +389,7 @@ export default function MeetingRoomPage({
         </div>
         <aside className="room-sidebar" hidden={panel === 'none'} aria-label="Panel de trabajo">
         <button className="secondary panel-close" onClick={() => setPanel(panel === 'brody' ? 'none' : 'brody')}>{panel === 'brody' ? 'Minimizar Brody' : 'Volver a Brody'}</button>
-        <div className="panel-content" hidden={panel !== 'brody'}>{token && <BrodyAssistant code={code} token={token} canEdit={isHost} refreshVersion={requirementsVersion} micOn={room.localMicOn} connected={room.connectionState === 'connected'} interrupted={lastResult?.payload.processingStatus === 'interrupted'} transcriptText={transcript[transcript.length - 1]?.text} />}</div>
+        <div className="panel-content" hidden={panel !== 'brody'}>{token && <BrodyAssistant code={code} token={token} canEdit={isHost} refreshVersion={requirementsVersion} speaking={room.speakers.size > 0} micOn={room.localMicOn} connected={room.connectionState === 'connected'} interrupted={lastResult?.payload.processingStatus === 'interrupted'} transcriptText={transcript[transcript.length - 1]?.text} />}</div>
         {panel === 'participants' && (
           <div className="side-panel-stack">
             {isHost && (

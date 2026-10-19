@@ -1,0 +1,21 @@
+import { act, renderHook } from '@testing-library/react';
+import { afterEach, expect, it, vi } from 'vitest';
+import { CONVERSATION_PAUSE_MS, useQuietSnapshot } from './useQuietSnapshot';
+afterEach(() => vi.useRealTimers());
+it('conserva el turno mientras hay voz, reinicia pausas breves y publica el contexto más reciente', () => {
+  vi.useFakeTimers();
+  const { result, rerender, unmount } = renderHook(({ data, speaking }) => useQuietSnapshot(data, speaking), { initialProps: { data: 'pregunta actual', speaking: false } });
+  rerender({ data: 'pregunta actual', speaking: true });
+  rerender({ data: 'primera propuesta', speaking: true });
+  expect(result.current.data).toBe('pregunta actual');
+  rerender({ data: 'primera propuesta', speaking: false });
+  act(() => vi.advanceTimersByTime(600));
+  rerender({ data: 'segunda propuesta con contexto adicional', speaking: true });
+  act(() => vi.advanceTimersByTime(1500));
+  expect(result.current.data).toBe('pregunta actual');
+  rerender({ data: 'segunda propuesta con contexto adicional', speaking: false });
+  act(() => vi.advanceTimersByTime(CONVERSATION_PAUSE_MS));
+  expect(result.current.data).toBe('segunda propuesta con contexto adicional');
+  expect(result.current.holding).toBe(false);
+  unmount();
+});
