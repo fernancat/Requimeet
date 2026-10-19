@@ -18,18 +18,20 @@ model HostUser {
 }
 
 model Meeting {
-  id           String        @id @default(uuid())
-  code         String        @unique
-  title        String
-  hostId       String
-  host         HostUser      @relation(fields: [hostId], references: [id])
-  status       String        @default("created")
-  createdAt    DateTime      @default(now())
-  startedAt    DateTime?
-  endedAt      DateTime?
-  joinRequests JoinRequest[]
-  participants Participant[]
-  messages     ChatMessage[]
+  id                 String              @id @default(uuid())
+  code               String              @unique
+  title              String
+  hostId             String
+  host               HostUser            @relation(fields: [hostId], references: [id])
+  status             String              @default("created")
+  createdAt          DateTime            @default(now())
+  startedAt          DateTime?
+  endedAt            DateTime?
+  joinRequests       JoinRequest[]
+  participants       Participant[]
+  messages           ChatMessage[]
+  transcriptSegments TranscriptSegment[]
+  requirements       Requirement[]
 }
 
 model GuestSession {
@@ -52,23 +54,26 @@ model JoinRequest {
   createdAt      DateTime     @default(now())
   decidedAt      DateTime?
   decidedById    String?
+
   @@index([meetingId, status])
 }
 
 model Participant {
-  id             String        @id @default(uuid())
-  meetingId      String
-  meeting        Meeting       @relation(fields: [meetingId], references: [id])
-  hostUserId     String?
-  hostUser       HostUser?     @relation(fields: [hostUserId], references: [id])
-  guestSessionId String?
-  guestSession   GuestSession? @relation(fields: [guestSessionId], references: [id])
-  displayName    String
-  role           String
-  state          String        @default("admitted")
-  joinedAt       DateTime      @default(now())
-  leftAt         DateTime?
-  messages       ChatMessage[]
+  id                 String              @id @default(uuid())
+  meetingId          String
+  meeting            Meeting             @relation(fields: [meetingId], references: [id])
+  hostUserId         String?
+  hostUser           HostUser?           @relation(fields: [hostUserId], references: [id])
+  guestSessionId     String?
+  guestSession       GuestSession?       @relation(fields: [guestSessionId], references: [id])
+  displayName        String
+  role               String
+  state              String              @default("admitted")
+  joinedAt           DateTime            @default(now())
+  leftAt             DateTime?
+  messages           ChatMessage[]
+  transcriptSegments TranscriptSegment[]
+
   @@index([meetingId])
 }
 
@@ -82,5 +87,49 @@ model ChatMessage {
   body                String
   clientRef           String
   createdAt           DateTime    @default(now())
+
   @@unique([meetingId, authorParticipantId, clientRef])
+}
+
+enum RequirementStatus {
+  PENDING
+  CORRECTED
+  APPROVED
+}
+
+model TranscriptSegment {
+  id            String   @id @default(uuid())
+  resultId      String   @unique
+  meetingId     String
+  participantId String?
+  trackSid      String?
+  text          String
+  startMs       Float?
+  endMs         Float?
+  createdAtMs   Float
+  createdAt     DateTime @default(now())
+
+  meeting      Meeting       @relation(fields: [meetingId], references: [id])
+  participant  Participant?  @relation(fields: [participantId], references: [id])
+  requirements Requirement[]
+
+  @@index([meetingId, createdAt])
+}
+
+model Requirement {
+  id                  String            @id @default(uuid())
+  meetingId           String
+  transcriptSegmentId String
+  originalText        String
+  text                String
+  status              RequirementStatus @default(PENDING)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  meeting           Meeting           @relation(fields: [meetingId], references: [id])
+  transcriptSegment TranscriptSegment @relation(fields: [transcriptSegmentId], references: [id])
+
+  @@unique([transcriptSegmentId, originalText])
+  @@index([meetingId, status])
+  @@index([transcriptSegmentId])
 }

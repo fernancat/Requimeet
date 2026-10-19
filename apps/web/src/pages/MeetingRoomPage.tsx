@@ -30,8 +30,14 @@ import {
   applyTranscriptResult,
   TranscriptSegment,
 } from '../features/transcript/transcript-store';
+import RequirementsPanel from '../features/requirements/RequirementsPanel';
 
-type Panel = 'none' | 'participants' | 'chat' | 'transcript';
+type Panel =
+  | 'none'
+  | 'participants'
+  | 'chat'
+  | 'transcript'
+  | 'requirements';
 
 interface SubscribeAck {
   ok: boolean;
@@ -76,6 +82,7 @@ export default function MeetingRoomPage({
   const [toast, setToast] = useState<string | null>(null);
   const [moderationErrors, setModerationErrors] = useState<Record<string, string>>({});
   const [confirmEnd, setConfirmEnd] = useState(false);
+  const [requirementsVersion, setRequirementsVersion] = useState(0);
 
   const onLeave = useCallback(
     (reason: ExitReason) => setExitReason(reason),
@@ -130,6 +137,9 @@ export default function MeetingRoomPage({
         result.kind === 'transcript-final'
       ) {
         setTranscript((current) => applyTranscriptResult(current, result));
+        if (result.kind === 'transcript-final' && result.isFinal) {
+          setRequirementsVersion((current) => current + 1);
+        }
       } else {
         setLastResult(result);
       }
@@ -389,8 +399,17 @@ export default function MeetingRoomPage({
             onRetry={chat.retry}
           />
         )}
-        {panel === 'transcript' && (
+                {panel === 'transcript' && (
           <TranscriptPanel segments={transcript} participants={participants} />
+        )}
+
+        {panel === 'requirements' && token && (
+          <RequirementsPanel
+            key={code}
+            code={code}
+            token={token}
+            refreshVersion={requirementsVersion}
+          />
         )}
       </main>
 
@@ -425,6 +444,13 @@ export default function MeetingRoomPage({
           onClick={() => togglePanel('transcript')}
         >
           Transcripción
+        </button>
+                <button
+          type="button"
+          className={panel === 'requirements' ? '' : 'secondary'}
+          onClick={() => togglePanel('requirements')}
+        >
+          Requerimientos
         </button>
         {isHost &&
           (confirmEnd ? (

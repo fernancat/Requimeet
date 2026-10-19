@@ -3,9 +3,10 @@ import { RealtimeModule } from '../realtime/realtime.module';
 import { InternalProcessingController } from './internal-processing.controller';
 import { InternalSecretGuard } from './internal-secret.guard';
 import { ProcessingOrchestrator } from './processing.orchestrator';
+import { RequirementsModule } from '../requirements/requirements.module';
 
 @Module({
-  imports: [RealtimeModule],
+  imports: [RealtimeModule, RequirementsModule],
   controllers: [InternalProcessingController],
   providers: [ProcessingOrchestrator, InternalSecretGuard],
 })

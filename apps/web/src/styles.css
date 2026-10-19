@@ -646,3 +646,111 @@ button.danger {
 .toast {
   border-color: var(--success);
 }
+
+.requirement-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.requirement-pending {
+  border-left: 4px solid #d97706;
+}
+
+.requirement-corrected {
+  border-left: 4px solid #2563eb;
+}
+
+.requirement-approved {
+  border-left: 4px solid #16a34a;
+}
+
+/* Permite ajustar el contenido a la altura disponible de la sala. */
+.room-main {
+  min-height: 0;
+  min-width: 0;
+}
+
+/* Panel de requerimientos. */
+.side-panel.requirements-panel {
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Mantiene visibles el título, filtros y mensajes. */
+.requirements-panel > :not(.requirements-list) {
+  flex-shrink: 0;
+}
+
+/* Solo la lista se desplaza verticalmente. */
+.requirements-panel .requirements-list {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 16px;
+  padding-right: 8px;
+  scrollbar-gutter: stable;
+  overscroll-behavior-y: contain;
+}
+
+/* Evita que las tarjetas se compriman para caber todas. */
+.requirements-panel .requirement-card {
+  flex: 0 0 auto;
+  min-width: 0;
+  padding: 12px;
+  border-top: 1px solid var(--bg-input);
+  border-right: 1px solid var(--bg-input);
+  border-bottom: 1px solid var(--bg-input);
+  border-radius: 8px;
+}
+
+.requirement-card textarea {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px;
+  border: 1px solid var(--text-dim);
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text);
+  font: inherit;
+  resize: vertical;
+}
+
+.requirement-card select {
+  margin-top: 6px;
+}
+
+.requirement-card details {
+  margin-top: 12px;
+}
+
+.requirement-card summary {
+  cursor: pointer;
+}
+
+.requirement-card blockquote {
+  margin: 12px 0;
+  padding-left: 10px;
+  border-left: 2px solid var(--accent);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Reserva altura para el panel al compartir pantalla. */
+.room-main.with-share .requirements-panel {
+  flex: 0 1 45%;
+  width: 100%;
+}
+
+/* Permite acomodar los botones en varias filas. */
+.room-controls {
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}

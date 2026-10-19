@@ -7,6 +7,7 @@ import { IdentityModule } from './modules/identity/identity.module';
 import { MeetingsModule } from './modules/meetings/meetings.module';
 import { ProcessingModule } from './modules/processing/processing.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
+import { RequirementsModule } from './modules/requirements/requirements.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { RealtimeModule } from './modules/realtime/realtime.module';
     ChatModule,
     RealtimeModule,
     ProcessingModule,
+    RequirementsModule,
   ],
 })
 export class AppModule {}
