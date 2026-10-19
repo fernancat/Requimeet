@@ -37,7 +37,7 @@ describe('respuestas habladas de Brody', () => {
     await ai.analyze(meeting.code, caller); await ai.processNext();
     const suggested = await prisma.question.findUniqueOrThrow({ where: { id: question.id } });
     expect(suggested.status).toBe('ASKED'); expect(suggested.answer).toBe('');
-    expect(suggested.answerSuggestion).toEqual({ text: 'Solo los administradores.', sourceIds: [segment.id] });
+    expect(suggested.answerSuggestion).toMatchObject({ text: 'Solo los administradores.', sourceIds: [segment.id] });
     const confirmed = await questions.edit(meeting.code, question.id, caller, { version: suggested.version, text: question.text, status: 'RESOLVED', answer: 'Solo los administradores.', evidenceIds: [segment.id] });
     expect(confirmed.status).toBe('RESOLVED'); expect(confirmed.answerSuggestion).toBeNull();
   });
@@ -67,4 +67,33 @@ describe('respuestas habladas de Brody', () => {
     const rejected = await questions.edit(meeting.code, question.id, caller, { version: saved.version, text: question.text, status: 'ASKED', answer: '', evidenceIds: [], dismissSuggestion: true });
     expect(rejected.answerSuggestion).toBeNull(); expect(rejected.askedAt!.getTime()).toBeGreaterThanOrEqual(question.askedAt!.getTime());
   });
+  it('resuelve automáticamente solo respuestas claras con citas literales verificadas y conserva historial', async () => {
+    const { meeting, question, segment, caller } = await setup();
+    const result = output(question.id, segment.id);
+    generate.mockResolvedValue({ ...result, answerSuggestions: [{ ...result.answerSuggestions[0], clarity: 'clear', reason: 'Rol explícito y sin contradicciones.', quotes: [{ sourceId: segment.id, text: segment.text }] }] });
+    await ai.analyze(meeting.code, caller); await ai.processNext();
+    const saved = await prisma.question.findUniqueOrThrow({ where: { id: question.id } });
+    expect(saved.status).toBe('RESOLVED'); expect(saved.automaticResolution).toBe(true);
+    expect(saved.evidenceIds).toEqual([segment.id]); expect(saved.answerSuggestion).toBeNull();
+    expect(JSON.stringify(saved.history)).toContain('brody');
+    const reopened = await questions.edit(meeting.code, question.id, caller, { version: saved.version, text: saved.text, status: 'ASKED', answer: '', evidenceIds: [] });
+    expect(reopened.status).toBe('ASKED'); expect(reopened.automaticResolution).toBe(false);
+  });
+  it.each(['uncertain', 'contradictory'])('pide confirmación ante claridad %s aunque las citas sean válidas', async clarity => {
+    const { meeting, question, segment, caller } = await setup();
+    const result = output(question.id, segment.id);
+    generate.mockResolvedValue({ ...result, answerSuggestions: [{ ...result.answerSuggestions[0], clarity, reason: 'Falta acordar el rol.', quotes: [{ sourceId: segment.id, text: segment.text }] }] });
+    await ai.analyze(meeting.code, caller); await ai.processNext();
+    const saved = await prisma.question.findUniqueOrThrow({ where: { id: question.id } });
+    expect(saved.status).toBe('ASKED'); expect(saved.automaticResolution).toBe(false);
+    expect(saved.answerSuggestion).toMatchObject({ reason: 'Falta acordar el rol.' });
+  });
+  it('no resuelve con citas inventadas aunque el proveedor diga clear', async () => {
+    const { meeting, question, segment, caller } = await setup();
+    const result = output(question.id, segment.id);
+    generate.mockResolvedValue({ ...result, answerSuggestions: [{ ...result.answerSuggestions[0], clarity: 'clear', quotes: [{ sourceId: segment.id, text: 'Cita inexistente' }] }] });
+    await ai.analyze(meeting.code, caller); await ai.processNext();
+    expect((await prisma.question.findUniqueOrThrow({ where: { id: question.id } })).status).toBe('ASKED');
+  });
+
 });

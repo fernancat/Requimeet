@@ -3,6 +3,9 @@ export const sources = z.array(z.string().min(1)).min(1).max(50);
 export const analysisSchema = z.object({
   answerSuggestions: z.array(z.object({
     questionId: z.string().min(1),
+    clarity: z.enum(['clear', 'uncertain', 'contradictory']).default('uncertain'),
+    reason: z.string().max(2000).default('Revisa si esta respuesta refleja lo acordado.'),
+    quotes: z.array(z.object({ sourceId: z.string(), text: z.string().trim().min(1).max(5000) })).max(50).default([]),
     text: z.string().trim().min(1).max(5000),
     sourceIds: sources,
   })).max(12).default([]),

@@ -66,6 +66,7 @@ export class QuestionsService {
         {
           text: previous.text,
           answer: previous.answer,
+          automaticResolution: previous.automaticResolution,
           answerSuggestion: previous.answerSuggestion,
           askedAt: previous.askedAt?.toISOString() ?? null,
           evidenceIds: previous.evidenceIds,
@@ -80,6 +81,7 @@ export class QuestionsService {
         where: { id, version: input.version },
         data: {
           ...fields,
+          automaticResolution: false,
           answerSuggestion: Prisma.DbNull,
           askedAt: input.status === 'ASKED' ? (previous.status !== 'ASKED' || dismissSuggestion ? new Date() : previous.askedAt) : previous.askedAt,
           evidenceIds: ids,
