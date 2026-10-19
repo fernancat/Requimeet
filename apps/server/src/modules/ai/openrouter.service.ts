@@ -1,3 +1,4 @@
+import { readJsonStream } from './stream-json';
 import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 @Injectable()
@@ -11,7 +12,7 @@ export class OpenRouterService {
       Boolean(this.config.get<string>('OPENROUTER_API_KEY'))
     );
   }
-  async generate(instruction: string, input: unknown, options: { live?: boolean } = {}): Promise<unknown> {
+  async generate(instruction: string, input: unknown, options: { live?: boolean; onPartial?: (value: Record<string, unknown[]>) => Promise<void> } = {}): Promise<unknown> {
     const key = this.config.get<string>('OPENROUTER_API_KEY');
     if (!key)
       throw new ServiceUnavailableException(
@@ -39,6 +40,7 @@ export class OpenRouterService {
       },
       body: JSON.stringify({
         model: this.model,
+        ...(options.onPartial ? { stream: true } : {}),
         temperature: 0.2,
         max_tokens: options.live ? 3000 : 7000,
         ...(options.live ? { reasoning: { effort: 'none' } } : {}),
@@ -58,6 +60,7 @@ export class OpenRouterService {
       throw new ServiceUnavailableException(
         `OpenRouter respondió ${res.status}; reintenta el análisis`,
       );
+    if (options.onPartial) return readJsonStream(res, options.onPartial);
     const result = (await res.json()) as {
       choices?: { message?: { content?: string }; finish_reason?: string }[];
     };
