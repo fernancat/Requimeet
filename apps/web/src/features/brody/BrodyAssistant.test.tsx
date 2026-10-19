@@ -46,4 +46,22 @@ describe('Brody live interaction', () => {
     expect(screen.queryByLabelText('Respuesta acordada')).toBeNull();
     expect(screen.queryByText('Analizar ahora')).toBeNull();
   });
+  it('shows an incoming spoken-answer proposal without overwriting a local draft', async () => {
+    questions[0].status = 'ASKED';
+    const view = render(<BrodyAssistant {...props} transcriptText="Solo los administradores." />);
+    await screen.findByText('Esperando una respuesta hablada');
+    fireEvent.change(screen.getByLabelText('Respuesta acordada'), { target: { value: 'Mi precisión manual' } });
+    questions = [{ ...questions[0], version: 4, answerSuggestion: { text: 'Solo los administradores.', sourceIds: ['s1'] } }];
+    view.rerender(<BrodyAssistant {...props} refreshVersion={1} />);
+    await screen.findByText('Esto entendí de la respuesta');
+    expect((screen.getByLabelText('Respuesta acordada') as HTMLTextAreaElement).value).toBe('Mi precisión manual');
+    expect(screen.getByText('Confirmar respuesta y continuar')).toBeTruthy();
+  });
+  it('explains microphone state and that a second participant is unnecessary', async () => {
+    questions[0].status = 'ASKED';
+    render(<BrodyAssistant {...props} micOn={false} />);
+    await screen.findByText('Activa el micrófono para responder');
+    expect(screen.getByText(/no necesitas otro participante/)).toBeTruthy();
+  });
+
 });

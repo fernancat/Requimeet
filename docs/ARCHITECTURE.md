@@ -148,3 +148,19 @@ El avatar carga Three.js de forma diferida y un GLB local CC0 de Quaternius (404
 Usa la animación Idle, respeta movimiento reducido, evita renderizar fuera de vista
 y libera los recursos al desmontarse. Si WebGL falla, el flujo textual sigue usable.
 La licencia y procedencia están en `apps/web/public/models/brody/LICENSE.txt`.
+
+### Respuestas orales propuestas por Brody
+
+`Question.askedAt` marca el inicio de la escucha al pasar a ASKED. El análisis
+incremental también produce `answerSuggestions` opcionales para preguntas realizadas,
+sin respuesta humana ni propuesta vigente. Cada pregunta expone al proveedor solo
+los IDs de segmentos finales nuevos con `createdAtMs >= askedAt` como evidencia
+permitida. Puede responder el anfitrión o cualquier participante admitido.
+
+La propuesta se persiste en `Question.answerSuggestion` con control de versión,
+validación de pertenencia y revisión de las fuentes. Una edición humana o corrección
+de la transcripción durante la inferencia evita guardar la propuesta obsoleta.
+La pregunta sigue ASKED hasta confirmación explícita del anfitrión; confirmar guarda
+respuesta y evidencia y pasa a RESOLVED. Rechazar limpia la propuesta y reinicia
+`askedAt`, sin volver a usar el mismo texto. El historial conserva la propuesta al
+editar. No se agregan llamadas IA: la detección comparte el lote incremental.

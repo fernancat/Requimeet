@@ -7,9 +7,9 @@ import { useResource, useUnsaved } from '../workspace/useResource';
 import { nextQuestion } from './brody-queue';
 const BrodyAvatar = lazy(() => import('./BrodyAvatar'));
 
-export default function BrodyAssistant({ code, token, canEdit, refreshVersion, interrupted, connected, transcriptText }: {
+export default function BrodyAssistant({ code, token, canEdit, refreshVersion, interrupted, connected, transcriptText, micOn = true }: {
   code: string; token: string; canEdit: boolean; refreshVersion: number;
-  interrupted: boolean; connected: boolean; transcriptText?: string;
+  interrupted: boolean; connected: boolean; transcriptText?: string; micOn?: boolean;
 }) {
   const questions = useResource<QuestionDto[]>(`/meetings/${code}/questions`, token, refreshVersion);
   const requirements = useResource<Requirement[]>(`/meetings/${code}/requirements`, token, refreshVersion);
@@ -28,17 +28,22 @@ export default function BrodyAssistant({ code, token, canEdit, refreshVersion, i
   const failed = analysis.data?.jobs[0]?.status === 'failed';
   const openCount = questions.data?.filter(q => q.status === 'PENDING' || q.status === 'ASKED').length ?? 0;
   const detected = (requirements.data ?? []).filter(r => !r.discarded).slice().reverse();
-  async function changeQuestion(status: QuestionStatus) {
+  const suggestion = current?.answerSuggestion;
+  const analyzedSinceAsked = current?.askedAt && analysis.data?.jobs.some(job => job.kind === 'analysis' && job.status === 'completed' && new Date(job.updatedAt).getTime() > new Date(current.askedAt!).getTime());
+  const answerText = current ? answers[current.id] ?? (current.answer || suggestion?.text || '') : '';
+  async function changeQuestion(status: QuestionStatus, dismissSuggestion = false) {
     if (!current || busy) return;
     setBusy(true); setError('');
     try {
       const updated = await api<QuestionDto>(`/meetings/${code}/questions/${current.id}`, { token, method: 'PATCH', body: {
         version: current.version, text: current.text, status,
-        answer: answers[current.id] ?? current.answer, evidenceIds: current.evidenceIds,
+        answer: dismissSuggestion ? current.answer : status === 'RESOLVED' ? answerText : answers[current.id] ?? current.answer,
+        evidenceIds: status === 'RESOLVED' && suggestion ? suggestion.sourceIds : current.evidenceIds,
+        ...(dismissSuggestion ? { dismissSuggestion: true } : {}),
       } });
       questions.setData(items => items?.map(q => q.id === updated.id ? updated : q) ?? [updated]);
-      setAnswers(all => { const copy = { ...all }; delete copy[updated.id]; return copy; });
-      setNotice(status === 'RESOLVED' ? 'Respuesta guardada. Vamos con la siguiente.' : status === 'ASKED' ? 'Pregunta marcada como realizada. Escuchemos la respuesta.' : 'Pregunta descartada.');
+      if (!dismissSuggestion) setAnswers(all => { const copy = { ...all }; delete copy[updated.id]; return copy; });
+      setNotice(dismissSuggestion ? 'De acuerdo. Esperaré una nueva respuesta.' : status === 'RESOLVED' ? 'Respuesta guardada. Vamos con la siguiente.' : status === 'ASKED' ? 'Pregunta marcada como realizada. Escuchemos la respuesta.' : 'Pregunta descartada.');
     } catch (e) { setError(e instanceof Error ? e.message : 'No se pudo guardar'); void questions.reload(); }
     finally { setBusy(false); }
   }
@@ -60,7 +65,7 @@ export default function BrodyAssistant({ code, token, canEdit, refreshVersion, i
     <div className="brody-conversation">
       <Suspense fallback={<div className="brody-avatar" />}><BrodyAvatar /></Suspense>
       <div className="brody-bubble" aria-live="polite" aria-atomic="true">
-        {current ? <><h3>{current.status === 'ASKED' ? 'Escuchemos la respuesta' : 'Ahora podrías preguntar'}</h3><p className="brody-question">{current.text}</p></>
+        {current ? <><h3>{suggestion ? 'Esto entendí de la respuesta' : current.status === 'ASKED' ? (micOn ? 'Esperando una respuesta hablada' : 'Activa el micrófono para responder') : 'Ahora podrías preguntar'}</h3><p className="brody-question">{suggestion?.text ?? current.text}</p></>
           : <p>{interrupted ? 'La transcripción se interrumpió. Las sugerencias guardadas siguen aquí.' : deferred.length ? 'Dejamos algunas preguntas para después. Puedes retomarlas cuando encajen en la conversación.' : 'Conversemos sobre lo que necesitan. Aquí te propondré qué preguntar y te mostraré los requerimientos que vaya detectando.'}</p>}
       </div>
     </div>
@@ -70,6 +75,12 @@ export default function BrodyAssistant({ code, token, canEdit, refreshVersion, i
       {(error || questions.error || requirements.error || analysis.error) && <p role="alert">{error || questions.error || requirements.error || analysis.error}</p>}
       {failed && <p role="alert">El último análisis falló. Puedes reintentarlo con «Analizar ahora».</p>}
       {current && <div className="brody-next">
+        {suggestion && <p>Para la pregunta: {current.text}</p>}
+        {current.status === 'ASKED' && !suggestion && <div className="brody-listening" role="status">
+          <p>{!micOn ? 'Tu micrófono está apagado. Puedes activarlo y responder tú mismo; no necesitas otro participante.' : working ? 'Estoy analizando la transcripción para identificar la respuesta…' : analyzedSinceAsked ? 'Ya analicé el texto, pero aún no identifiqué una respuesta clara. Puedes aclararla hablando o escribirla abajo.' : 'Responde en voz alta y haz una pausa. Cuando llegue el texto confirmado, buscaré la respuesta y te la propondré aquí.'}</p>
+          <p><strong>Último texto recibido:</strong> {transcriptText || 'Todavía no llega texto del audio. Comprueba el micrófono y sus permisos.'}</p>
+          {failed && <p>El análisis falló. Reintenta con «Analizar ahora» o escribe la respuesta.</p>}
+        </div>}
         <details><summary>Por qué conviene preguntarlo</summary><p>{current.reason}</p></details>
         {canEdit && <>
           <div className="brody-actions">
@@ -78,8 +89,9 @@ export default function BrodyAssistant({ code, token, canEdit, refreshVersion, i
             <button className="secondary" disabled={busy} onClick={() => void changeQuestion('DISCARDED')}>Descartar</button>
           </div>
           <label htmlFor="brody-answer">Respuesta acordada</label>
-          <textarea id="brody-answer" rows={2} maxLength={5000} placeholder="Anota lo que acordaron para cerrar esta pregunta" value={answers[current.id] ?? current.answer} onChange={e => setAnswers(all => ({ ...all, [current.id]: e.target.value }))} />
-          <button disabled={busy || !(answers[current.id] ?? current.answer).trim()} onClick={() => void changeQuestion('RESOLVED')}>Guardar respuesta y continuar</button>
+          <textarea id="brody-answer" rows={2} maxLength={5000} placeholder="Anota lo que acordaron para cerrar esta pregunta" value={answerText} onChange={e => setAnswers(all => ({ ...all, [current.id]: e.target.value }))} />
+          <button disabled={busy || !answerText.trim()} onClick={() => void changeQuestion('RESOLVED')}>{suggestion ? 'Confirmar respuesta y continuar' : 'Guardar respuesta y continuar'}</button>
+          {suggestion && <button className="secondary" disabled={busy} onClick={() => void changeQuestion('ASKED', true)}>No era esa respuesta; seguir escuchando</button>}
         </>}
       </div>}
       <div className="brody-queue"><span>{openCount} preguntas abiertas</span>{deferred.length > 0 && <button className="secondary" onClick={() => { setDeferred([]); setCurrentId(undefined); }}>Retomar pendientes</button>}</div>

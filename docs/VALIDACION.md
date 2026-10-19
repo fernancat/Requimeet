@@ -56,3 +56,14 @@ reales de reuniones. Los scripts reproducibles están documentados en INTEGRACIO
 - Esta verificación no vuelve a medir latencia de proveedores ni reconocimiento
   de voz: reutiliza el procesamiento incremental ya verificado. Brody no habla
   por audio ni deduce respuestas automáticamente.
+
+## Detección de respuestas orales
+
+- Servidor: 69 tests aprobados; frontend: 52. Builds de servidor y frontend correctos.
+- Casos nuevos: propuesta con evidencia sin resolución automática, protección de
+  respuesta humana concurrente, rechazo de evidencia anterior a ASKED, rechazo de
+  propuesta y nueva ventana de escucha, borrador local intacto y estado de micrófono.
+- OpenRouter real con texto sintético ingresado como segmento final: propuesta
+  persistida con fuentes y estado ASKED. Confirmación desde Chromium verificada
+  en PostgreSQL como RESOLVED. Esta prueba valida el enlace transcripción→IA→UI,
+  no una nueva prueba de reconocimiento de voz mediante micrófono físico.

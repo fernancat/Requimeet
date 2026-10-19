@@ -120,3 +120,19 @@ y puede minimizarse. La revisión completa se conserva en el selector secundario
 No requiere migraciones ni variables nuevas. El modelo Dino de Quaternius es CC0:
 https://poly.pizza/m/wuerCFCWNR. Se sirve localmente y no llama a servicios de assets
 durante una reunión. El chunk 3D se carga por separado del frontend principal.
+
+### Responder hablando a Brody
+
+Aplicar `prisma:deploy` y `prisma:generate` para la migración
+`20261019050000_question_answer_suggestions` (ya aplicada en el entorno local).
+Recargar el frontend. Marcar «Ya la pregunté» antes de responder, hablar con el
+micrófono activo y hacer una pausa. No se necesita otro participante. Cuando llega
+la transcripción final, la IA propone «Esto entendí de la respuesta». Revisar o
+editar el texto y pulsar «Confirmar respuesta y continuar». La propuesta no cierra
+la pregunta automáticamente. «No era esa respuesta» reinicia la escucha.
+
+Mientras espera, Brody muestra el último texto recibido, el micrófono apagado,
+el análisis en curso o que no encontró una respuesta clara. Si no aparece texto,
+revisar micrófono/permisos y conexión de transcripción; si hay texto sin propuesta,
+se puede aclarar hablando o guardar una respuesta manual. La latencia depende de
+la finalización del audio y del proveedor, no del número de participantes.
