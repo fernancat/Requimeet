@@ -1,4 +1,4 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { MeetingSummary } from '@requimeet/contracts';
 import { api } from '../lib/api';
@@ -22,6 +22,8 @@ export default function DashboardPage() {
   const [copied, setCopied] = useState(false);
   const [meetings, setMeetings] = useState<MeetingSummary[]>(getRememberedMeetings());
 
+  useEffect(() => { void api<MeetingSummary[]>('/meetings', { token: getHostToken() }).then(setMeetings).catch(() => setError('No se pudo recuperar tus reuniones')); }, []);
+
   async function onCreate(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
@@ -34,7 +36,7 @@ export default function DashboardPage() {
       });
       setCreated(meeting);
       rememberMeeting(meeting);
-      setMeetings(getRememberedMeetings());
+      setMeetings(current => [meeting, ...current]);
       setTitle('');
     } catch {
       setError('No se pudo crear la reunión');
@@ -119,9 +121,10 @@ export default function DashboardPage() {
                   <span>
                     {m.title} <span className="info-text">({m.code})</span>
                   </span>
-                  <button className="secondary" onClick={() => onStart(m.code)}>
-                    Iniciar
-                  </button>
+                  <div className="actions">
+                  {m.status !== 'ended' && <button className="secondary" onClick={() => onStart(m.code)}>{m.status === 'active' ? 'Entrar' : 'Iniciar'}</button>}
+                  <button onClick={() => navigate(`/meetings/${m.code}/review`)}>Revisar</button>
+                  </div>
                 </li>
               ))}
             </ul>
