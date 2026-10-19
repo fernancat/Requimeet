@@ -2,6 +2,8 @@ export type QuestionStatus = 'PENDING' | 'ASKED' | 'RESOLVED' | 'DISCARDED';
 export type QuestionCategory =
   'permissions' | 'validations' | 'rules' | 'exceptions' | 'missing';
 export interface QuestionDto {
+  askedAt?: string | null;
+  answerSuggestion?: { text: string; sourceIds: string[] } | null;
   id: string;
   text: string;
   category: QuestionCategory;

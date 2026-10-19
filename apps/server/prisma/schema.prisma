@@ -168,6 +168,8 @@ model AiJob {
   @@index([status, createdAt])
 }
 model Question {
+  askedAt DateTime?
+  answerSuggestion Json?
   id String @id @default(uuid())
   meetingId String
   meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
