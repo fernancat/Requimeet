@@ -1,3 +1,4 @@
+import { exactQuestions } from './exact-question';
 import { compactIds } from './compact-ids';
 import { LIVE_ANALYSIS_PROMPT } from './live-analysis.prompt';
 import {
@@ -26,7 +27,8 @@ export type JobHandler = (job: AiJob) => Promise<unknown>;
 export class AiService implements OnModuleInit, OnModuleDestroy {
   private timer?: NodeJS.Timeout;
   private timers = new Map<string, NodeJS.Timeout>();
-  private running = false;
+  private selecting = false;
+  private runningMeetings = new Set<string>();
   private stopped = false;
   private handlers = new Map<string, JobHandler>();
   constructor(
@@ -47,7 +49,7 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
     });
     this.timer = setInterval(
       () => void this.processNext().catch(() => {}),
-      500,
+      200,
     );
     this.timer.unref();
     const meetings = await this.prisma.meeting.findMany({
@@ -68,7 +70,7 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
     const timer = setTimeout(() => {
       this.timers.delete(meetingId);
       void this.enqueueAnalysis(meetingId).catch(() => {});
-    }, 800);
+    }, 400);
     timer.unref();
     this.timers.set(meetingId, timer);
   }
@@ -181,7 +183,7 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
       orderBy: { createdAt: 'desc' },
     });
     const input = {
-      policyVersion: 'brody-live-v3',
+      policyVersion: 'brody-live-v4',
       segments,
       context: context.slice().reverse().map(s => ({ id: s.id, text: s.text.slice(0, 3000), revision: s.revision, createdAtMs: s.createdAtMs, speakerRole: s.participant?.role })),
       requirements,
@@ -210,11 +212,13 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
       });
   }
   async processNext() {
-    if (this.running || this.stopped) return;
-    this.running = true;
+    if (this.selecting || this.stopped || this.runningMeetings.size >= 3) return;
+    this.selecting = true;
+    let selecting = true;
+    let activeMeeting: string | undefined;
     try {
       const job = await this.prisma.aiJob.findFirst({
-        where: { status: 'queued' },
+        where: { status: 'queued', meetingId: { notIn: [...this.runningMeetings] } },
         orderBy: { createdAt: 'asc' },
       });
       if (!job) return;
@@ -223,6 +227,9 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
         data: { status: 'running', attempts: { increment: 1 }, error: null },
       });
       if (!claimed.count) return;
+      activeMeeting = job.meetingId;
+      this.runningMeetings.add(job.meetingId);
+      this.selecting = false; selecting = false;
       await this.notify(job.meetingId);
       try {
         const output =
@@ -237,7 +244,8 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
             output: output as Prisma.InputJsonValue,
           },
         });
-        this.schedule({ meetingId: job.meetingId });
+        if (job.kind === 'analysis') await this.enqueueAnalysis(job.meetingId);
+        else this.schedule({ meetingId: job.meetingId });
       } catch (error) {
         await this.prisma.aiJob.update({
           where: { id: job.id },
@@ -253,27 +261,61 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
       if (job.kind === 'analysis' && job.attempts >= 2) this.schedule({ meetingId: job.meetingId });
       await this.notify(job.meetingId);
     } finally {
-      this.running = false;
+      if (selecting) this.selecting = false;
+      if (activeMeeting) this.runningMeetings.delete(activeMeeting);
     }
   }
   private async runAnalysis(job: AiJob) {
     const input = job.input as unknown as AnalysisInput;
-    const wire = compactIds(input);
-    const result = analysisSchema.parse(wire.expand(
+    const startedAt = Date.now();
+    const timing = { ageBeforeAttemptMs: startedAt - job.createdAt.getTime(), firstAnswerMs: null as number | null, firstQuestionMs: null as number | null, totalMs: 0 };
+    const detected = exactQuestions(input.questions, [...input.segments, ...input.context]);
+    if (detected.length) {
+      await this.persistAnalysis(job, input, analysisSchema.parse({ askedQuestions: detected, questions: [], requirements: [] }), false);
+      await this.notify(job.meetingId);
+    }
+    const wire = compactIds({ ...input, questions: input.questions.map(q =>
+      detected.some(d => d.questionId === q.id) ? { ...q, status: 'ASKED' } : q) });
+    const parse = (value: unknown) => {
+      const parsed = analysisSchema.parse(wire.expand(value));
+      parsed.askedQuestions = [...detected, ...parsed.askedQuestions.filter(q => !detected.some(d => d.questionId === q.questionId))];
+      return parsed;
+    };
+    let result = parse(
       await this.router.generate(
         LIVE_ANALYSIS_PROMPT,
         wire.input,
         { live: true, onPartial: async arrays => {
           // A complete array is an independently validated unit, never token text.
           if (!Object.hasOwn(arrays, 'askedQuestions')) return;
-          const ready = analysisSchema.parse(wire.expand({ questions: [], ...arrays, requirements: [] }));
+          const ready = parse({ questions: [], ...arrays, requirements: [] });
           await this.persistAnalysis(job, input, ready, false);
+          if (ready.answerSuggestions.length && timing.firstAnswerMs === null) timing.firstAnswerMs = Date.now() - startedAt;
+          if (ready.questions.length && timing.firstQuestionMs === null) timing.firstQuestionMs = Date.now() - startedAt;
           await this.notify(job.meetingId);
         } },
       ),
-    ));
+    );
+    result = await this.persistAnalysis(job, input, result, false);
+    // A valid empty array must not strand a completed conversation turn.
+    // Ask only for the missing follow-up, retaining all evidence and decisions.
+    if (!result.questions.length && input.questions.length &&
+        !await this.prisma.question.count({ where: { meetingId: job.meetingId, status: { in: ['PENDING', 'ASKED'] } } }) &&
+        await this.prisma.question.count({ where: { meetingId: job.meetingId, status: 'RESOLVED' } })) {
+      const currentQuestions = await this.prisma.question.findMany({ where: { meetingId: job.meetingId }, select: { text: true, answer: true, status: true } });
+      const generated = await this.router.generate(
+          'La respuesta anterior ya está guardada y no queda ninguna pregunta abierta. Propón exactamente UNA pregunta breve para continuar esta entrevista de requerimientos, relacionada con lo conversado. Prioriza conocer el proceso, problemas y objetivos antes de detalles técnicos. No repitas ninguna pregunta existente ni algo ya contestado. Usa solo sourceIds de segments/context. Devuelve únicamente {"questions":[{"text":"...","category":"missing","priority":"HIGH","reason":"...","sourceIds":["id"]}]}. El array no puede estar vacío.',
+          { ...wire.input as object, currentQuestions }, { live: true });
+      const followup = analysisSchema.parse(wire.expand({ requirements: [], questions: (generated as { questions?: unknown })?.questions }));
+      if (followup.questions.length !== 1) throw new Error('Falta una pregunta de seguimiento válida');
+      await this.persistAnalysis(job, input, followup, false);
+      result.questions = followup.questions;
+      timing.firstQuestionMs = Date.now() - startedAt;
+      await this.notify(job.meetingId);
+    }
     await this.persistAnalysis(job, input, result, true);
-    return result;
+    timing.totalMs = Date.now() - startedAt;
+    return { ...result, timing };
   }
   private async persistAnalysis(job: AiJob, input: AnalysisInput, result: ReturnType<typeof analysisSchema.parse>, final: boolean) {
     // Ignore redundant proposals for closed questions without changing human decisions.
@@ -302,6 +344,12 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
       // Repeated recognition of an already asked question is an idempotent no-op.
       if (question.status === 'PENDING') detections.set(question.id, { sourceId: source.id, quote: asked.quote, at: source.createdAtMs! });
     }
+    // A model may offer an unsolicited answer to a known pending question.
+    // Ignore it instead of retrying the entire batch; never infer that it was asked.
+    result.answerSuggestions = result.answerSuggestions.filter(suggestion => {
+      const question = input.questions.find(q => q.id === suggestion.questionId);
+      return !question || ((question.status === 'ASKED' || detections.has(question.id)) && suggestion.sourceIds.every(id => question.eligibleSourceIds.includes(id)));
+    });
     for (const suggestion of result.answerSuggestions) {
       const question = input.questions.find(q => q.id === suggestion.questionId);
       if (!question || (question.status !== 'ASKED' && !detections.has(question.id))) throw new Error('Respuesta para una pregunta no realizada');
@@ -384,7 +432,8 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
         });
         known.add(normalize(item.text));
       }
-      await tx.question.createMany({
+      const openQuestions = await tx.question.count({ where: { meetingId: job.meetingId, status: { in: ['PENDING', 'ASKED'] } } });
+      if (!openQuestions) await tx.question.createMany({
         data: result.questions.map((q) => ({
           ...q,
           meetingId: job.meetingId,

@@ -13,11 +13,13 @@ describe('respuestas habladas de Brody', () => {
   const access = new MeetingAccessService(db);
   const questions = new QuestionsService(db, access, events);
   const generate = jest.fn();
+  const followup = jest.fn();
   let ai: AiService;
   beforeEach(async () => {
     await cleanDb(prisma);
     generate.mockReset();
-    ai = new AiService(db, access, { enabled: () => true, generate } as unknown as OpenRouterService, events);
+    followup.mockReset().mockImplementation(async input => ({ questions: [{ text: '¿Cómo se registra la decisión?', category: 'missing', reason: 'Falta el registro.', priority: 'MEDIUM', sourceIds: [input.segments[0].id] }] }));
+    ai = new AiService(db, access, { enabled: () => true, generate: (instruction: string, input: unknown, options: unknown) => instruction.startsWith('La respuesta anterior') ? followup(input) : generate(instruction, input, options) } as unknown as OpenRouterService, events);
   });
   afterEach(() => ai.onModuleDestroy());
   afterAll(() => prisma.$disconnect());
@@ -57,7 +59,7 @@ describe('respuestas habladas de Brody', () => {
     await prisma.transcriptSegment.update({ where: { id: segment.id }, data: { createdAtMs: question.askedAt!.getTime() - 1000 } });
     generate.mockResolvedValue(output(question.id, segment.id));
     const { job } = await ai.analyze(meeting.code, caller); await ai.processNext();
-    expect((await prisma.aiJob.findUniqueOrThrow({ where: { id: job!.id } })).error).toContain('fuentes desconocidas');
+    expect((await prisma.aiJob.findUniqueOrThrow({ where: { id: job!.id } })).status).toBe('completed');
     expect((await prisma.question.findUniqueOrThrow({ where: { id: question.id } })).answerSuggestion).toBeNull();
   });
   it('rechazar una propuesta limpia la sugerencia e inicia una nueva ventana de escucha', async () => {
@@ -229,6 +231,72 @@ describe('respuestas habladas de Brody', () => {
     const { job } = await ai.analyze(meeting.code, caller); await ai.processNext();
     expect((await prisma.question.findUniqueOrThrow({ where: { id: question.id } })).answer).toBe('Decisión humana guardada.');
     expect(await prisma.question.count({ where: { meetingId: meeting.id } })).toBe(2);
+    expect((await prisma.aiJob.findUniqueOrThrow({ where: { id: job!.id } })).status).toBe('completed');
+  });
+
+  it('completa el siguiente turno con una pasada enfocada cuando la IA devuelve cero preguntas', async () => {
+    const { meeting, question, segment, caller } = await setup();
+    generate.mockResolvedValue({ requirements: [], questions: [], answerSuggestions: [{ questionId: question.id,
+      text: 'Administradores.', sourceIds: [segment.id], clarity: 'clear', quotes: [{ sourceId: segment.id, text: segment.text }] }] });
+    const { job } = await ai.analyze(meeting.code, caller); await ai.processNext();
+    expect(followup).toHaveBeenCalledTimes(1);
+    expect(await prisma.question.count({ where: { meetingId: meeting.id, status: 'PENDING' } })).toBe(1);
+    expect((await prisma.aiJob.findUniqueOrThrow({ where: { id: job!.id } })).status).toBe('completed');
+  });
+
+  it('detecta una pregunta literal aun si el proveedor no devuelve detección', async () => {
+    const { meeting, question, segment, caller } = await setup(false);
+    const text = '¿Quién aprueba las solicitudes?';
+    await prisma.question.update({ where: { id: question.id }, data: { text } });
+    await prisma.transcriptSegment.update({ where: { id: segment.id }, data: { text } });
+    generate.mockImplementation(async (_prompt, input) => {
+      expect(input.questions[0].status).toBe('ASKED');
+      return { questions: [], requirements: [] };
+    });
+    await ai.analyze(meeting.code, caller); await ai.processNext();
+    expect((await prisma.question.findUniqueOrThrow({ where: { id: question.id } })).status).toBe('ASKED');
+  });
+
+  it('no reintenta ni resuelve una respuesta no solicitada para una pregunta pendiente', async () => {
+    const { meeting, question, segment, caller } = await setup(false);
+    generate.mockResolvedValue(output(question.id, segment.id));
+    const { job } = await ai.analyze(meeting.code, caller); await ai.processNext();
+    expect((await prisma.question.findUniqueOrThrow({ where: { id: question.id } })).status).toBe('PENDING');
+    expect((await prisma.aiJob.findUniqueOrThrow({ where: { id: job!.id } })).status).toBe('completed');
+    expect(followup).not.toHaveBeenCalled();
+  });
+
+  it('una reunión lenta no bloquea otra y mantiene una ejecución por reunión', async () => {
+    const { meeting } = await setup();
+    const other = await prisma.meeting.create({ data: { code: 'OTHERLIVE', title: 'Otra reunión', hostId: meeting.hostId, status: 'active' } });
+    let release!: () => void;
+    let started!: () => void;
+    const began = new Promise<void>(resolve => { started = resolve; });
+    const hold = new Promise<void>(resolve => { release = resolve; });
+    ai.register('slow-test', async job => { if (job.meetingId === meeting.id) { started(); await hold; } return {}; });
+    const first = await ai.enqueue(meeting.id, 'slow-test', { turn: 1 });
+    await ai.enqueue(meeting.id, 'slow-test', { turn: 2 });
+    const second = await ai.enqueue(other.id, 'slow-test', { turn: 1 });
+    const running = ai.processNext();
+    try {
+      await began;
+      await ai.processNext();
+      expect((await prisma.aiJob.findUniqueOrThrow({ where: { id: second.id } })).status).toBe('completed');
+      expect((await prisma.aiJob.findUniqueOrThrow({ where: { id: first.id } })).status).toBe('running');
+      expect(await prisma.aiJob.count({ where: { meetingId: meeting.id, status: 'running' } })).toBe(1);
+    } finally { release(); await running; }
+  });
+
+  it('una propuesta con evidencia fuera de ventana no bloquea una respuesta válida del mismo lote', async () => {
+    const { meeting, question, segment, caller } = await setup();
+    const other = await prisma.question.create({ data: { meetingId: meeting.id, text: 'Otra pregunta', normalizedText: 'otra pregunta', category: 'missing', reason: 'Falta', priority: 'LOW', status: 'ASKED', askedAt: new Date(Date.now()+10000), sourceIds: [] } });
+    generate.mockResolvedValue({ questions: [], requirements: [], answerSuggestions: [
+      { questionId: other.id, text: 'No válida.', sourceIds: [segment.id] },
+      { questionId: question.id, text: 'Administradores.', sourceIds: [segment.id], clarity: 'clear', quotes: [{ sourceId: segment.id, text: segment.text }] },
+    ] });
+    const { job } = await ai.analyze(meeting.code, caller); await ai.processNext();
+    expect((await prisma.question.findUniqueOrThrow({ where: { id: question.id } })).status).toBe('RESOLVED');
+    expect((await prisma.question.findUniqueOrThrow({ where: { id: other.id } })).answerSuggestion).toBeNull();
     expect((await prisma.aiJob.findUniqueOrThrow({ where: { id: job!.id } })).status).toBe('completed');
   });
 
