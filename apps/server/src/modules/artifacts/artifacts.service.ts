@@ -1,3 +1,4 @@
+import { exportDocx, exportPdf } from './document-export';
 import { BadRequestException, ConflictException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AiJob, Prisma } from '@prisma/client';
@@ -22,6 +23,17 @@ export class ArtifactsService implements OnModuleInit {
   const snapshot = { title: meeting.title, requirements, questions, entities, transcripts };
   const fingerprint = createHash('sha256').update(JSON.stringify(snapshot)).digest('hex');
   return { ...snapshot, fingerprint };
+ }
+ async export(code: string, id: string, caller: Caller, format: string, version: number) {
+  const meeting = await this.access.require(code, caller, true);
+  if (!['pdf','docx'].includes(format)) throw new BadRequestException('Formato inválido');
+  const item = await this.prisma.artifact.findFirst({ where: { id, meetingId: meeting.id, kind: 'document' } });
+  if (!item) throw new NotFoundException('Documento no encontrado');
+  if (version !== item.version) throw new ConflictException('La versión cambió; recarga antes de exportar');
+  const source = await this.source(meeting.id, 'document');
+  const content = documentSchema.parse(item.content);
+  const meta = { version: item.version, reviewed: item.reviewed, stale: source.fingerprint !== item.sourceFingerprint, date: item.updatedAt };
+  return format === 'pdf' ? exportPdf(content, meta) : exportDocx(content, meta);
  }
  async list(code: string, kind: string, caller: Caller) {
   this.kind(kind);

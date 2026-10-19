@@ -57,3 +57,6 @@ GET/PATCH /meetings/:code/questions expone preguntas con categoría, prioridad, 
 
 ## Documento final (25)
 POST /meetings/:code/artifacts/document genera ocho secciones estructuradas y captura el modelo de entidades seleccionado. El inventario de aprobados se deriva del servidor. Cada propuesta conserva huella de fuentes e historial y admite edición con versión esperada. Marcar revisado exige fuentes vigentes. GET /meetings recupera reuniones del propietario desde PostgreSQL; /meetings/:code/review permite continuar sin reabrir LiveKit.
+
+## Exportación (26)
+GET /meetings/:code/artifacts/document/:id/export/pdf|docx?version=N descarga exclusivamente una versión persistida y autorizada al propietario. PDFKit y docx comparten contenido estructurado; Sharp rasteriza SVG escapado. Diagramas detallados se dividen cada 16 atributos y las tablas conservan nombres completos. Los documentos sin revisión o con fuentes modificadas se identifican como BORRADOR. scripts/verify-exports.ts genera fixtures de QA sin proveedores ni datos reales.
