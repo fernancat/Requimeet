@@ -289,8 +289,8 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
           // A complete array is an independently validated unit, never token text.
           if (!Object.hasOwn(arrays, 'askedQuestions')) return;
           const ready = parse({ questions: [], ...arrays, requirements: [] });
-          await this.persistAnalysis(job, input, ready, false);
-          if (ready.answerSuggestions.length && timing.firstAnswerMs === null) timing.firstAnswerMs = Date.now() - startedAt;
+          const accepted = await this.persistAnalysis(job, input, ready, false);
+          if (accepted.answerSuggestions.length && timing.firstAnswerMs === null) timing.firstAnswerMs = Date.now() - startedAt;
           if (ready.questions.length && timing.firstQuestionMs === null) timing.firstQuestionMs = Date.now() - startedAt;
           await this.notify(job.meetingId);
         } },
@@ -434,7 +434,7 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
       }
       const openQuestions = await tx.question.count({ where: { meetingId: job.meetingId, status: { in: ['PENDING', 'ASKED'] } } });
       if (!openQuestions) await tx.question.createMany({
-        data: result.questions.map((q) => ({
+        data: result.questions.slice(0, 1).map((q) => ({
           ...q,
           meetingId: job.meetingId,
           normalizedText: normalize(q.text),

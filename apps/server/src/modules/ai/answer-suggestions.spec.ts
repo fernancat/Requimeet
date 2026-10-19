@@ -227,7 +227,7 @@ describe('respuestas habladas de Brody', () => {
   it('ignora respuestas repetidas de preguntas cerradas sin bloquear preguntas nuevas', async () => {
     const { meeting, question, segment, caller } = await setup();
     await questions.edit(meeting.code, question.id, caller, { version: question.version, text: question.text, status: 'RESOLVED', answer: 'Decisión humana guardada.', evidenceIds: [] });
-    generate.mockResolvedValue({ ...output(question.id, segment.id), questions: [{ text: '¿Cómo se registran las aprobaciones?', category: 'missing', priority: 'MEDIUM', reason: 'Falta el registro.', sourceIds: [segment.id] }] });
+    generate.mockResolvedValue({ ...output(question.id, segment.id), questions: [{ text: '¿Cómo se registran las aprobaciones?', category: 'missing', priority: 'MEDIUM', reason: 'Falta el registro.', sourceIds: [segment.id] }, { text: '¿Qué otro proceso falta?', category: 'missing', priority: 'LOW', reason: 'Segunda propuesta del proveedor.', sourceIds: [segment.id] }] });
     const { job } = await ai.analyze(meeting.code, caller); await ai.processNext();
     expect((await prisma.question.findUniqueOrThrow({ where: { id: question.id } })).answer).toBe('Decisión humana guardada.');
     expect(await prisma.question.count({ where: { meetingId: meeting.id } })).toBe(2);
