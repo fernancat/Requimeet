@@ -38,37 +38,48 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="page">
-      <div className="card">
-        <h1>RequiMeet</h1>
-        <p className="subtitle">Inicia sesión como anfitrión</p>
-        <form onSubmit={onSubmit}>
-          <label htmlFor="email">Correo</label>
-          <input
-            id="email"
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <label htmlFor="password">Contraseña</label>
-          <input
-            id="password"
-            type="password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-          {error && <p className="error-text">{error}</p>}
-          <div className="actions">
-            <button type="submit" disabled={busy || !email || !password}>
-              Entrar
-            </button>
-          </div>
-        </form>
-        <p className="info-text">
-          ¿Sin cuenta? <Link to="/register">Regístrate</Link>
-        </p>
+    <div className="page login-page">
+      <div className="card login-card">
+        <div className="login-header">
+          <h1>RequiMeet</h1>
+          <p>Inicia sesión como anfitrión</p>
+        </div>
+
+        <div className="login-content">
+          <form onSubmit={onSubmit}>
+            <label htmlFor="email">Correo electrónico</label>
+            <input
+              id="email"
+              type="email"
+              placeholder="correo@ejemplo.com"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+
+            <label htmlFor="password">Contraseña</label>
+            <input
+              id="password"
+              type="password"
+              placeholder="Ingresa tu contraseña"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+
+            {error && <p className="error-text">{error}</p>}
+
+            <div className="actions login-actions">
+              <button type="submit" disabled={busy || !email || !password}>
+                Entrar
+              </button>
+            </div>
+          </form>
+
+          <p className="info-text login-register">
+            ¿Sin cuenta? <Link to="/register">Regístrate</Link>
+          </p>
+        </div>
       </div>
     </div>
   );
