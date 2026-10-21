@@ -450,32 +450,48 @@ export default function MeetingRoomPage({
       {toast && <div className="share-notice toast">{toast}</div>}
 
       <footer className="room-controls">
-        <button className={room.localMicOn ? 'secondary' : 'danger'} onClick={() => void room.toggleMic(!room.localMicOn)}>
+        <button
+          className={`control-media ${room.localMicOn ? 'secondary' : 'danger'}`}
+          onClick={() => void room.toggleMic(!room.localMicOn)}
+        >
           {room.localMicOn ? 'Micrófono' : 'Micrófono apagado'}
         </button>
+
         <button
-          className={room.localCameraOn ? 'secondary' : 'danger'}
+          className={`control-media ${room.localCameraOn ? 'secondary' : 'danger'}`}
           onClick={() => void room.toggleCamera(!room.localCameraOn)}
         >
           {room.localCameraOn ? 'Cámara' : 'Cámara apagada'}
         </button>
-        <button className="secondary" onClick={() => void onShareScreen()}>
+
+        <button
+          className="secondary control-share"
+          onClick={() => void onShareScreen()}
+        >
           {room.localSharing ? 'Detener presentación' : 'Compartir pantalla'}
         </button>
+
         {isHost &&
           (confirmEnd ? (
-            <button className="danger" onClick={() => void onEndMeeting()}>
+            <button className="danger control-end" onClick={() => void onEndMeeting()}>
               Finalizar para todos
             </button>
           ) : (
-            <button className="danger" onClick={() => setConfirmEnd(true)}>
+            <button className="danger control-end" onClick={() => setConfirmEnd(true)}>
               Finalizar
             </button>
           ))}
-        <button className="secondary" onClick={() => { if (confirmLeaving()) void room.leave(); }}>
+
+        <button
+          className="secondary control-exit"
+          onClick={() => {
+            if (confirmLeaving()) void room.leave();
+          }}
+        >
           Salir
         </button>
       </footer>
+
       <p className="share-audio-note">
         El audio del sistema al compartir pantalla depende del navegador.
       </p>

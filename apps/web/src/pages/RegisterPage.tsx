@@ -1,4 +1,4 @@
-import { FormEvent, useState } from 'react';
+﻿import { FormEvent, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../lib/api';
 import { saveHostToken } from '../lib/auth';
@@ -30,7 +30,7 @@ export default function RegisterPage() {
     } catch (err) {
       setError(
         err instanceof ApiError && err.status === 409
-          ? 'Ese correo ya está registrado'
+          ? 'Ese correo ya estÃ¡ registrado'
           : 'No se pudo crear la cuenta. Revisa los datos.',
       );
     } finally {
@@ -38,47 +38,61 @@ export default function RegisterPage() {
     }
   }
 
+
   return (
-    <div className="page">
-      <div className="card">
-        <h1>Crear cuenta</h1>
-        <p className="subtitle">Regístrate para crear reuniones</p>
-        <form onSubmit={onSubmit}>
-          <label htmlFor="displayName">Nombre visible</label>
-          <input
-            id="displayName"
-            required
-            maxLength={80}
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-          />
-          <label htmlFor="email">Correo</label>
-          <input
-            id="email"
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <label htmlFor="password">Contraseña (mínimo 8 caracteres)</label>
-          <input
-            id="password"
-            type="password"
-            required
-            minLength={8}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-          {error && <p className="error-text">{error}</p>}
-          <div className="actions">
-            <button type="submit" disabled={busy || !email || password.length < 8 || !displayName}>
-              Registrarme
-            </button>
-          </div>
-        </form>
-        <p className="info-text">
-          ¿Ya tienes cuenta? <Link to="/login">Entrar</Link>
-        </p>
+    <div className="page register-page">
+      <div className="card register-card">
+        <div className="register-header">
+          <h1>Crear cuenta</h1>
+          <p className="subtitle">RegÃ­strate para crear reuniones</p>
+        </div>
+
+        <div className="register-content">
+          <form onSubmit={onSubmit}>
+            <label htmlFor="displayName">Nombre visible</label>
+            <input
+              id="displayName"
+              required
+              maxLength={80}
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+            />
+
+            <label htmlFor="email">Correo electrÃ³nico</label>
+            <input
+              id="email"
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+
+            <label htmlFor="password">ContraseÃ±a (mÃ­nimo 8 caracteres)</label>
+            <input
+              id="password"
+              type="password"
+              required
+              minLength={8}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+
+            {error && <p className="error-text">{error}</p>}
+
+            <div className="actions register-actions">
+              <button
+                type="submit"
+                disabled={busy || !email || password.length < 8 || !displayName}
+              >
+                Registrarme
+              </button>
+            </div>
+          </form>
+
+          <p className="info-text register-login">
+            Â¿Ya tienes cuenta? <Link to="/login">Entrar</Link>
+          </p>
+        </div>
       </div>
     </div>
   );
