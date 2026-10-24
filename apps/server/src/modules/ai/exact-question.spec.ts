@@ -19,3 +19,13 @@ it('reconoce la pregunta completa repartida entre segmentos con puntuación de A
   expect(exactQuestions([q], segments.slice(0, 1))).toEqual([]);
   expect(exactQuestions([{ ...q, eligibleSourceIds: ['s', 's2'] }], [segments[0], { ...segments[1], speakerRole: 'guest' }])).toEqual([]);
 });
+
+it('reconoce la apertura natural sin exigir muletillas ni el determinante literal', () => {
+  const opening = { ...q, text: 'Para empezar, ¿a qué se dedica la empresa?' };
+  expect(exactQuestions([opening], [{ ...s, text: '¿A qué se dedica tu empresa' }]))
+    .toEqual([{ questionId: 'q', sourceId: 's', quote: '¿A qué se dedica tu empresa' }]);
+  for (const text of ['Mi empresa se dedica a asuntos jurídicos.', 'Comentaste a qué se dedica tu empresa.', '¿A qué se dedica tu empresa y qué problema tiene?']) {
+    const different = text.includes('y qué') ? { ...opening, text: '¿Qué problema tiene tu empresa?' } : opening;
+    expect(exactQuestions([different], [{ ...s, text }])).toEqual([]);
+  }
+});

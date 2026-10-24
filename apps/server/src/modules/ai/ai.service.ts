@@ -145,7 +145,7 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
     });
     // Explicit retry can revisit an unanswered turn after a prompt fix, even if
     // its segments were already analyzed. Fingerprinting still deduplicates it.
-    if (!pending.length && retry && await this.prisma.question.count({ where: { meetingId, status: 'ASKED', answer: '' } })) {
+    if (!pending.length && retry && await this.prisma.question.count({ where: { meetingId, status: { in: ['PENDING', 'ASKED'] }, answer: '' } })) {
       pending = (await this.prisma.transcriptSegment.findMany({
         where: { meetingId, isFinal: true }, orderBy: [{ createdAtMs: 'desc' }, { id: 'desc' }], take: 20,
         include: { participant: { select: { role: true } } },
@@ -183,7 +183,7 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
       orderBy: { createdAt: 'desc' },
     });
     const input = {
-      policyVersion: 'brody-live-v4',
+      policyVersion: 'brody-live-v6',
       segments,
       context: context.slice().reverse().map(s => ({ id: s.id, text: s.text.slice(0, 3000), revision: s.revision, createdAtMs: s.createdAtMs, speakerRole: s.participant?.role })),
       requirements,

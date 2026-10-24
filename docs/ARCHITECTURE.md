@@ -193,9 +193,10 @@ correcciones o cambios de rumbo, no para el camino habitual de la entrevista.
 ### Análisis breve durante la conversación
 
 El análisis en vivo usa el mismo `deepseek/deepseek-v4-flash` con
-`reasoning.effort=none` y hasta 3000 tokens de salida; las generaciones de documento
-y entidades conservan la configuración anterior. El catálogo consultado admite
-`none` y reporta `high` por defecto. Referencia del parámetro:
+`reasoning.effort=low` y hasta 3000 tokens de salida; las generaciones de documento
+y entidades conservan la configuración anterior. Desactivar el razonamiento
+produjo falsos negativos con respuestas elípticas en la comparación real del
+2026-10-24. Se conserva razonamiento bajo para no sacrificar comprensión. Referencia del parámetro:
 https://openrouter.ai/docs/guides/best-practices/reasoning-tokens.
 
 `live-analysis.prompt.ts` prioriza evaluar preguntas ASKED antes de abrir temas.
@@ -310,3 +311,11 @@ Cerrar el stream Deepgram de un participante no bloquea la cola de los demás.
 El consumidor separa inmediatamente la pista retirada y conserva una promesa de
 su drenado. El cierre de sesión espera también los drenados ya iniciados y sus
 resultados finales, no solo las pistas que siguen publicadas.
+
+
+Los finales de transcripción pueden incluir `previousPartialText` para auditar
+una revisión ASR. Se conserva en el historial como `asr-revision` no confirmada,
+incluso si el final llega antes que el parcial. Solo el texto final alimenta IA;
+la interfaz permite consultar la hipótesis anterior sin promoverla a evidencia.
+El detector de preguntas tolera introducciones y determinantes de empresa
+acotados, conservando cita literal, autor y referencias elegibles.

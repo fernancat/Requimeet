@@ -266,3 +266,19 @@ recuperación automática después de detener solo su sesión del processor,
 eventos Socket.IO de los tres participantes y análisis IA completado. Se usó
 audio sintético y una reunión aislada; no equivale a validar micrófonos físicos
 ni la interfaz visual de todos los compañeros. Build y 182 tests pasaron.
+
+
+### Preguntas naturales y revisiones ASR
+
+Brody reconoce «¿A qué se dedica tu empresa?» como la pregunta inicial
+«Para empezar, ¿a qué se dedica la empresa?», sin exigir leer la introducción.
+No se usan coincidencias parciales de tema para marcar una pregunta realizada.
+`Analizar ahora` permite revisar también preguntas pendientes no detectadas.
+La política de análisis v6 utiliza razonamiento bajo en DeepSeek V4 Flash.
+
+Cuando Deepgram cambia un provisional al emitir el final, el anterior queda
+conservado en historial y se puede desplegar en Transcripción. Es texto **no
+confirmado**: no se concatena al final ni se usa para aprobar respuestas.
+La frase sintética «Mi empresa se dedica a asuntos jurídicos» salió completa
+con Nova-2 y Nova-3; esa prueba no reproduce por sí sola la pérdida reportada
+en el micrófono real ni justifica cambiar de modelo automáticamente.
