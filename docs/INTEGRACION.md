@@ -259,3 +259,10 @@ el incidente a una versión antigua sin comprobarlo.
 Referencias: [fiabilidad de conexión LiveKit](https://docs.livekit.io/intro/basics/connect/),
 [límites por proyecto Deepgram](https://developers.deepgram.com/reference/api-rate-limits),
 [versiones del SDK Node](https://github.com/livekit/node-sdks/releases).
+
+Tras aplicar las correcciones pasó el harness real por la URL pública de ngrok:
+tres voces con finales persistidos, reconexión de un invitado con nueva pista,
+recuperación automática después de detener solo su sesión del processor,
+eventos Socket.IO de los tres participantes y análisis IA completado. Se usó
+audio sintético y una reunión aislada; no equivale a validar micrófonos físicos
+ni la interfaz visual de todos los compañeros. Build y 182 tests pasaron.
