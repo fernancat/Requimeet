@@ -285,3 +285,16 @@ it('el cierre lento de una pista no bloquea el audio de otro participante y el c
     jest.useRealTimers();
   }
 });
+
+it('conserva la hipótesis previa como no confirmada cuando Deepgram acorta el final', async () => {
+  const socket = new FakeSocket();
+  const results: ProcessingResult[] = [];
+  const consumer = new DeepgramConsumer('m', 'key', r => results.push(r), () => {}, () => socket);
+  consumer.onAudioFrame(audioFrame('p', 'sid'));
+  socket.receive(transcriptMessage('Mi empresa se dedica a asuntos jurídicos'));
+  socket.receive(transcriptMessage('asuntos jurídicos', { is_final: true }));
+  expect(results.at(-1)?.payload).toMatchObject({ text: 'asuntos jurídicos', previousPartialText: 'Mi empresa se dedica a asuntos jurídicos' });
+  socket.receive(transcriptMessage('Nueva frase', { is_final: true }));
+  expect(results.at(-1)?.payload.previousPartialText).toBeUndefined();
+  await consumer.onSessionEnd();
+});

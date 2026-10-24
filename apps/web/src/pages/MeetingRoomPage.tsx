@@ -171,8 +171,8 @@ export default function MeetingRoomPage({
     const loadHistory = async () => {
         let cursor: string | null = null;
         do {
-          const page: { items: (TranscriptSegment & { id: string })[]; nextCursor: string | null } = await api(`/meetings/${code}/transcripts${cursor ? `?cursor=${cursor}` : ''}`, { token });
-          setTranscript(current => page.items.reduce((all, item) => applyTranscriptResult(all, { resultId: item.resultId, revision: item.revision, participantId: item.participantId ?? undefined, meetingId: code, kind: item.isFinal ? 'transcript-final' : 'transcript-partial', isFinal: item.isFinal, createdAtMs: 0, payload: { text: item.text, startMs: item.startMs, endMs: item.endMs } }), current));
+          const page: { items: (TranscriptSegment & { id: string; history?: { event?: string; text?: string }[] })[]; nextCursor: string | null } = await api(`/meetings/${code}/transcripts${cursor ? `?cursor=${cursor}` : ''}`, { token });
+          setTranscript(current => page.items.reduce((all, item) => applyTranscriptResult(all, { resultId: item.resultId, revision: item.revision, participantId: item.participantId ?? undefined, meetingId: code, kind: item.isFinal ? 'transcript-final' : 'transcript-partial', isFinal: item.isFinal, createdAtMs: 0, payload: { text: item.text, startMs: item.startMs, endMs: item.endMs, previousPartialText: item.history?.find(h => h.event === 'asr-revision')?.text } }), current));
           cursor = page.nextCursor;
         } while (cursor);
     };

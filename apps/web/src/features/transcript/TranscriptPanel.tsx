@@ -44,6 +44,11 @@ export default function TranscriptPanel({ segments, participants }: TranscriptPa
               {!segment.isFinal && <> · parcial</>}
             </span>
             <span className="transcript-text">{segment.text}</span>
+            {segment.isFinal && segment.previousPartialText && segment.previousPartialText !== segment.text && (
+              <details><summary>El reconocimiento cambió el texto provisional</summary>
+                <p>Versión provisional, no confirmada: {segment.previousPartialText}</p>
+              </details>
+            )}
           </div>
         ))}
         <div ref={bottomRef} />

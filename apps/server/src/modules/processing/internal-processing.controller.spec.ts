@@ -127,4 +127,19 @@ describe('InternalProcessingController (integracion)', () => {
     const invalid = await postResult({ hello: 'world' });
     expect(await invalid.json()).toMatchObject({ received: false });
   });
+  it('conserva el provisional cuando un final más corto llega antes que sus parciales', async () => {
+    const { user } = await auth.register({ email: `history-${Date.now()}@example.com`, password: 'password123', displayName: 'Host' });
+    const meeting = await meetings.create(user.id, { title: 'History' });
+    const participant = await prisma.participant.create({ data: { meetingId: meeting.id, hostUserId: user.id, role: 'host', displayName: 'Host' } });
+    const final: ProcessingResult = { resultId: 'shorter-final', meetingId: meeting.id, participantId: participant.id,
+      kind: 'transcript-final', isFinal: true, revision: 2, createdAtMs: Date.now(),
+      payload: { text: 'asuntos jurídicos', previousPartialText: 'Mi empresa se dedica a asuntos jurídicos' } };
+    expect((await postResult(final)).status).toBe(201);
+    await postResult({ ...final, revision: 1, kind: 'transcript-partial', isFinal: false, payload: { text: 'Mi empresa se dedica a asuntos jurídicos' } });
+    const saved = await prisma.transcriptSegment.findUniqueOrThrow({ where: { resultId: final.resultId } });
+    expect(saved.text).toBe('asuntos jurídicos');
+    expect(saved.isFinal).toBe(true);
+    expect(saved.history).toEqual([expect.objectContaining({ text: 'Mi empresa se dedica a asuntos jurídicos', isFinal: false, event: 'asr-revision' })]);
+  });
+
 });

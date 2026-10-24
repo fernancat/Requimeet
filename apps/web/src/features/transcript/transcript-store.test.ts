@@ -100,3 +100,12 @@ describe('applyTranscriptResult', () => {
    expect(applyTranscriptResult(state, final)).toEqual(state);
    expect(applyTranscriptResult(state, { ...final, revision: 2, kind: 'transcript-partial', isFinal: false })).toEqual(state);
  });
+
+it('mantiene el final y conserva el provisional diferente para revisión', () => {
+  const partial = result({ resultId: 'same', revision: 1, payload: { text: 'Mi empresa se dedica a asuntos jurídicos' } });
+  const final = result({ resultId: 'same', revision: 2, kind: 'transcript-final', isFinal: true, payload: { text: 'asuntos jurídicos' } });
+  const state = applyTranscriptResult(applyTranscriptResult([], partial), final);
+  expect(state[0]).toMatchObject({ text: 'asuntos jurídicos', isFinal: true, previousPartialText: 'Mi empresa se dedica a asuntos jurídicos' });
+  const restored = applyTranscriptResult([], { ...final, payload: { ...final.payload, previousPartialText: state[0].previousPartialText } });
+  expect(restored).toEqual(state);
+});

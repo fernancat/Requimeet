@@ -42,6 +42,7 @@ interface TrackStream {
   done?: () => void;
   track: TrackRef;
   lastPartialId: string | null;
+  lastPartialText: string | null;
   utteranceStartMs: number | null;
   utteranceEndMs: number | null;
   finalChunks: string[];
@@ -151,7 +152,7 @@ export class DeepgramConsumer implements MediaConsumer {
       offsetMs: this.startedAtMs ? Math.max(0, frame.receivedAtMs - this.startedAtMs) : 0,
       trackOffsetMs: frame.mediaTimeMs,
       track: frame.track,
-      lastPartialId: null,
+      lastPartialId: null, lastPartialText: null,
       utteranceStartMs: null,
       utteranceEndMs: null,
       finalChunks: [],
@@ -243,6 +244,7 @@ export class DeepgramConsumer implements MediaConsumer {
       },
     });
     stream.lastPartialId = resultId;
+    stream.lastPartialText = text;
   }
 
   private emitFinal(stream: TrackStream): void {
@@ -260,6 +262,7 @@ export class DeepgramConsumer implements MediaConsumer {
         createdAtMs: Date.now(),
         payload: {
           text,
+          ...(stream.lastPartialText && stream.lastPartialText !== text ? { previousPartialText: stream.lastPartialText } : {}),
           startMs: stream.utteranceStartMs === null ? null : stream.offsetMs + stream.utteranceStartMs,
         trackStartMs: stream.utteranceStartMs === null ? null : stream.trackOffsetMs + stream.utteranceStartMs,
           endMs: stream.utteranceEndMs === null ? null : stream.offsetMs + stream.utteranceEndMs,
@@ -270,6 +273,7 @@ export class DeepgramConsumer implements MediaConsumer {
     stream.segmentId = randomUUID();
     stream.revision = 0;
     stream.lastPartialId = null;
+    stream.lastPartialText = null;
     stream.finalChunks = [];
     stream.utteranceStartMs = null;
     stream.utteranceEndMs = null;

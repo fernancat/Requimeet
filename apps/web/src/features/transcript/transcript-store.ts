@@ -3,6 +3,7 @@ import type { ProcessingResult } from '@requimeet/contracts';
 export interface TranscriptSegment {
   resultId: string;
   revision?: number;
+  previousPartialText?: string;
   participantId: string | null;
   text: string;
   startMs: number | null;
@@ -19,6 +20,7 @@ export function applyTranscriptResult(
   }
   const payload = result.payload as {
     text?: unknown;
+    previousPartialText?: unknown;
     startMs?: unknown;
     endMs?: unknown;
   };
@@ -30,10 +32,13 @@ export function applyTranscriptResult(
     startMs: typeof payload.startMs === 'number' ? payload.startMs : null,
     endMs: typeof payload.endMs === 'number' ? payload.endMs : null,
     isFinal: result.isFinal,
+    ...(typeof payload.previousPartialText === 'string' ? { previousPartialText: payload.previousPartialText } : {}),
   };
   const existing = segments.findIndex(s => s.resultId === result.resultId);
   if (existing >= 0) {
     if ((segments[existing].revision ?? 0) >= (result.revision ?? 1) || segments[existing].isFinal && !result.isFinal) return segments;
+    if (result.isFinal && !segment.previousPartialText && !segments[existing].isFinal && segments[existing].text !== segment.text)
+      segment.previousPartialText = segments[existing].text;
     return segments.map((s, i) => i === existing ? segment : s);
   }
   if (result.replacesResultId) {

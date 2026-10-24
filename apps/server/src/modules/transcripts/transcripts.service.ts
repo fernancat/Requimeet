@@ -28,7 +28,7 @@ export class TranscriptsService {
   }
   async save(result: ProcessingResult) {
     if (!result.kind.startsWith('transcript-')) return null;
-    const { text, startMs, endMs, trackStartMs, trackEndMs } = result.payload;
+    const { text, startMs, endMs, trackStartMs, trackEndMs, previousPartialText } = result.payload;
     const revision = result.revision ?? 1;
     if (
       typeof text !== 'string' ||
@@ -55,6 +55,10 @@ export class TranscriptsService {
       }))
     )
       throw new BadRequestException('Participante inválido');
+    const previousText = typeof previousPartialText === 'string' && previousPartialText.length <= 30000
+      && previousPartialText.trim() !== text.trim() ? previousPartialText.trim() : null;
+    const asrHistory = previousText && result.isFinal
+      ? [{ event: 'asr-revision', text: previousText, isFinal: false, at: new Date(result.createdAtMs).toISOString() }] : [];
     const data = {
       text: text.trim(),
       originalText: text.trim(),
@@ -70,6 +74,7 @@ export class TranscriptsService {
         data: [
           {
             ...data,
+            history: asrHistory,
             resultId: result.resultId,
             meetingId: result.meetingId,
             participantId: result.participantId,
@@ -94,7 +99,13 @@ export class TranscriptsService {
           isFinal: false,
           edited: false,
         },
-        data,
+        data: {
+          ...data,
+          ...(result.isFinal ? { history: asrHistory.length ? asrHistory :
+            !existing.isFinal && existing.text !== data.text
+              ? [{ event: 'asr-revision', text: existing.text, isFinal: false, at: new Date(result.createdAtMs).toISOString() }]
+              : (Array.isArray(existing.history) ? existing.history : []) } : {}),
+        },
       });
       return tx.transcriptSegment.findUniqueOrThrow({
         where: { id: existing.id },
