@@ -506,6 +506,7 @@ export default function MeetingRoomPage({
         </aside>
       </main>
 
+      {room.error && <div role="alert" className="share-notice">{room.error}</div>}
       {shareNotice && <div className="share-notice">{shareNotice}</div>}
       {toast && <div className="share-notice toast">{toast}</div>}
 

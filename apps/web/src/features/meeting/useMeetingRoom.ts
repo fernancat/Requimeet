@@ -126,6 +126,7 @@ export function useMeetingRoom(
 
       newRoom
         .on(RoomEvent.ConnectionStateChanged, (state) => {
+          if (cancelled) return;
           setConnectionState(state);
           bump();
         })
@@ -151,6 +152,7 @@ export function useMeetingRoom(
           bump();
         })
         .on(RoomEvent.Disconnected, () => {
+          if (cancelled) return;
           setConnectionState('disconnected' as ConnectionState);
         });
 
@@ -163,11 +165,16 @@ export function useMeetingRoom(
         RoomEvent.TrackUnmuted,
         RoomEvent.TrackStreamStateChanged,
       ]) {
-        newRoom.on(event, () => bump());
+        newRoom.on(event, () => {
+          if (cancelled) return;
+          setLocalMicOn(newRoom.localParticipant.isMicrophoneEnabled);
+          setLocalCameraOn(newRoom.localParticipant.isCameraEnabled);
+          bump();
+        });
       }
 
       try {
-        await newRoom.connect(LIVEKIT_URL, media.token);
+        await newRoom.connect(media.livekitUrl || LIVEKIT_URL, media.token);
       } catch (err) {
         if (!cancelled) {
           setError(`No se pudo conectar a la videollamada: ${String(err)}`);
@@ -231,9 +238,20 @@ export function useMeetingRoom(
 
   const toggleMic = useCallback(
     async (enabled: boolean) => {
-      if (!roomRef.current) return;
-      await roomRef.current.localParticipant.setMicrophoneEnabled(enabled);
-      setLocalMicOn(enabled);
+      const current = roomRef.current;
+      if (!current) return;
+      try {
+        await current.localParticipant.setMicrophoneEnabled(enabled);
+        if (current !== roomRef.current) return;
+        setError(null);
+      } catch (error) {
+        if (current !== roomRef.current) return;
+        const name = error && typeof error === 'object' && 'name' in error ? String(error.name) : '';
+        setError(name === 'NotAllowedError'
+          ? 'El navegador bloqueó el micrófono. Permite el acceso al micrófono de este sitio y vuelve a activarlo.'
+          : 'No se pudo activar el micrófono. Revisa el dispositivo seleccionado en Participantes y vuelve a intentarlo.');
+      }
+      setLocalMicOn(current.localParticipant.isMicrophoneEnabled);
     },
     [],
   );

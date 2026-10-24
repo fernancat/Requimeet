@@ -199,3 +199,39 @@ fuera del intervalo elegible o atribuida a un invitado se descarta sin fallar
 la extracción del lote. No marca la pregunta como realizada ni habilita una
 respuesta automática dependiente. Las referencias desconocidas siguen rechazándose.
 La regresión cubre extracción válida junto con detecciones inválidas por autor y cita.
+
+### Recuperación de pistas y pruebas aisladas
+
+El backend compara cada 10 s las pistas de audio activas del SFU con los SID
+suscritos por el processor. Dos comprobaciones consecutivas con pistas ausentes
+solicitan una nueva sesión, conservando el origen temporal de la reunión. Esto
+cubre sesiones que todavía declaran `connected` pero mantienen participantes
+antiguos, además del reinicio del proceso. Las sesiones por reunión serializan
+arranque/cierre; las esperas de conexión, desconexión y drenado tienen límites.
+Deepgram limita la apertura del WebSocket a 8 s.
+
+En pruebas, Nest no carga archivos `.env` privados y el reconciliador no arranca.
+El setup de Jest fija además endpoints y credenciales antes de importar Prisma
+(que también puede cargar `.env`); las pruebas realtime simulan el servicio SFU.
+Así los fixtures con credenciales ficticias no llaman al processor de una reunión
+real. La interfaz usa la URL de LiveKit del token emitido por el backend, refleja
+el estado real del micrófono y muestra errores al activarlo dentro de la sala.
+
+El processor recibe PCM remuestreado por LiveKit a 16 kHz mono: 256 kbit/s
+por pista, frente a 768 kbit/s a 48 kHz. Esto reduce el tráfico de reconocimiento
+sin cambiar el audio que escuchan los participantes. Varias pistas siguen
+requiriendo subida suficiente; ngrok transporta HTTP/Socket.IO, no este audio.
+
+Prueba real reproducible (audio sintético propio, PCM16 mono 48 kHz):
+
+```bash
+node scripts/verify-multi-speaker.cjs https://tu-dominio /ruta/frase.pcm
+QA_RECOVERY=1 node scripts/verify-multi-speaker.cjs http://localhost:5173 /ruta/frase.pcm
+```
+
+Crea una reunión aislada con anfitrión y dos invitados, verifica finales por
+participante, eventos Socket.IO, reconexión y una ejecución IA completada.
+La opción de recuperación lee el secreto interno local sin imprimirlo y detiene
+únicamente la sesión de esa reunión para comprobar su recuperación automática.
+No prueba un micrófono físico ni el render de Brody. Un fallo de red hace fallar
+la prueba; no se presenta como resultado satisfactorio.

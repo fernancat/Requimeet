@@ -1,10 +1,12 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { saveGuestSession } from '../lib/auth';
 import MeetingRoomPage from './MeetingRoomPage';
 
-const { disconnectMock, connectMock } = vi.hoisted(() => ({
+const { disconnectMock, connectMock, microphoneMock, micState } = vi.hoisted(() => ({
+  micState: { enabled: true },
+  microphoneMock: vi.fn().mockResolvedValue(undefined),
   disconnectMock: vi.fn().mockResolvedValue(undefined),
   connectMock: vi.fn().mockResolvedValue(undefined),
 }));
@@ -18,9 +20,9 @@ vi.mock('livekit-client', () => {
       identity: 'p-local',
       name: 'Invitado',
       metadata: '',
-      isMicrophoneEnabled: true,
+      get isMicrophoneEnabled() { return micState.enabled; },
       isCameraEnabled: true,
-      setMicrophoneEnabled: vi.fn().mockResolvedValue(undefined),
+      setMicrophoneEnabled: microphoneMock,
       setCameraEnabled: vi.fn().mockResolvedValue(undefined),
       setScreenShareEnabled: vi.fn().mockResolvedValue(undefined),
       getTrackPublication: () => undefined,
@@ -92,7 +94,20 @@ vi.mock('../lib/socket', () => ({
 describe('MeetingRoomPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    microphoneMock.mockReset().mockResolvedValue(undefined);
+    micState.enabled = true;
     saveGuestSession('ABC123', { token: 'guest-token', displayName: 'Invitado' });
+  });
+
+  it('muestra el fallo de permiso dentro de la sala y mantiene el micrófono apagado', async () => {
+    micState.enabled = false;
+    render(<MemoryRouter><MeetingRoomPage code="ABC123" /></MemoryRouter>);
+    await waitFor(() => expect(screen.getByText('Conectado')).toBeTruthy());
+    await waitFor(() => expect(microphoneMock).toHaveBeenCalled());
+    microphoneMock.mockRejectedValueOnce(new DOMException('denied', 'NotAllowedError'));
+    fireEvent.click(screen.getByRole('button', { name: 'Micrófono apagado' }));
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('El navegador bloqueó'));
+    expect(screen.getByRole('button', { name: 'Micrófono apagado' })).toBeTruthy();
   });
 
   it('conecta la room y al desmontar llama room.disconnect', async () => {
