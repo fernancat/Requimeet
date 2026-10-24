@@ -298,3 +298,15 @@ mismo origen temporal. Las llamadas externas y el cierre tienen límites; las
 transiciones por reunión se serializan para evitar procesadores duplicados.
 
 El audio para reconocimiento se remuestrea en el SDK nativo a 16 kHz mono (PCM16): reduce de 768 a 256 kbit/s la subida por pista a Deepgram. El audio de la llamada conserva su configuración original.
+
+#### Aislamiento del cierre de pistas
+
+La cola compartida puede descartar audio/vídeo bajo presión, pero conserva eventos
+como inicio, publicación y cierre. El descarte selecciona el elemento multimedia
+más antiguo sin alterar el orden de los eventos; si solo quedan eventos, estos
+se conservan aunque superen el límite de frames.
+
+Cerrar el stream Deepgram de un participante no bloquea la cola de los demás.
+El consumidor separa inmediatamente la pista retirada y conserva una promesa de
+su drenado. El cierre de sesión espera también los drenados ya iniciados y sus
+resultados finales, no solo las pistas que siguen publicadas.

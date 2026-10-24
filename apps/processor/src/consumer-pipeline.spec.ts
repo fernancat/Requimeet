@@ -67,3 +67,15 @@ describe('ConsumerPipeline', () => {
     expect(processed).toBeGreaterThan(0);
   });
 });
+
+it('la presión de audio no elimina eventos de ciclo de vida', async () => {
+  const events: string[] = [];
+  const pipeline = new ConsumerPipeline({}, 'lifecycle', () => {});
+  pipeline.push({ type: 'event', invoke: () => { events.push('start'); } });
+  for (let i = 0; i < 80; i++) pipeline.push({ type: 'audio', frame: frame() });
+  pipeline.push({ type: 'event', invoke: () => { events.push('end'); } });
+  pipeline.start();
+  await pipeline.close();
+  expect(events).toEqual(['start', 'end']);
+  expect(pipeline.droppedCount).toBeGreaterThan(0);
+});

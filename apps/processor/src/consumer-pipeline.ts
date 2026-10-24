@@ -13,7 +13,7 @@ const LOG_EVERY_DROPS = 100;
  * Un consumidor que lanza se loguea y NO interrumpe la sesion.
  */
 export class ConsumerPipeline {
-  readonly buffer = new FrameBuffer<FrameEnvelope>(50);
+  readonly buffer = new FrameBuffer<FrameEnvelope>(50, envelope => envelope.type !== 'event');
   private worker: Promise<void> | null = null;
 
   constructor(

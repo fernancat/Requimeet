@@ -235,3 +235,27 @@ La opción de recuperación lee el secreto interno local sin imprimirlo y detien
 únicamente la sesión de esa reunión para comprobar su recuperación automática.
 No prueba un micrófono físico ni el render de Brody. Un fallo de red hace fallar
 la prueba; no se presenta como resultado satisfactorio.
+
+### Diagnóstico adicional de audio (2026-10-24)
+
+Se reprodujeron sin red dos fallos: un `onTrackUnpublished` que esperaba hasta
+5 s bloqueaba todos los participantes de la cola compartida; la política
+`drop-oldest` eliminaba también eventos de ciclo de vida al saturarse. Las
+regresiones comprueban aislamiento entre participantes, conservación de eventos
+y entrega de finales tardíos durante el cierre.
+
+Comprobaciones externas acotadas: la clave configurada de Deepgram abrió tres
+WebSockets simultáneos (sin 401/429); OpenRouter devolvió JSON válido con
+`deepseek/deepseek-v4-flash`. Los tokens/secretos internos y LiveKit coincidieron
+entre servidor y processor. Estas pruebas verifican las credenciales actuales,
+no garantizan saldo ni disponibilidad futuros.
+
+Se comparó recepción RTC de tres emisores sintéticos, entradas y salidas con
+transporte automático y con TURN forzado: ambos pasaron en esa ronda. No se
+fuerza TURN en producción por esa sola comparación. El SDK instalado 0.13.35
+ya incluye la corrección anterior de streams desuscritos; no se atribuye todo
+el incidente a una versión antigua sin comprobarlo.
+
+Referencias: [fiabilidad de conexión LiveKit](https://docs.livekit.io/intro/basics/connect/),
+[límites por proyecto Deepgram](https://developers.deepgram.com/reference/api-rate-limits),
+[versiones del SDK Node](https://github.com/livekit/node-sdks/releases).

@@ -250,3 +250,38 @@ it('espera OPEN, conserva el último final al cerrar y entrega revisiones establ
   expect(transcripts.at(-1)).toMatchObject({ isFinal: true, resultId: transcripts[0].resultId, payload: { text: 'final pendiente' } });
   expect(transcripts.at(-1)!.revision).toBeGreaterThan(transcripts[0].revision!);
 });
+
+it('el cierre lento de una pista no bloquea el audio de otro participante y el cierre de sesión sí lo espera', async () => {
+  jest.useFakeTimers();
+  const { ConsumerPipeline } = await import('./consumer-pipeline');
+  const sockets: Array<{ sent: Array<string | Buffer>; handlers: Record<string, (...args: any[]) => void> }> = [];
+  const results: ProcessingResult[] = [];
+  const consumer = new DeepgramConsumer('m1', 'key', r => results.push(r), () => {}, () => {
+    const state = { sent: [] as Array<string | Buffer>, handlers: {} as Record<string, (...args: any[]) => void> };
+    sockets.push(state);
+    return { readyState: 1, send: value => { state.sent.push(value); }, on: (event: string, fn: any) => { state.handlers[event] = fn; }, close: () => state.handlers.close?.() };
+  });
+  const pipeline = new ConsumerPipeline(consumer, 'test', () => {});
+  pipeline.start();
+  try {
+    pipeline.push({ type: 'audio', frame: audioFrame('p1', 'sid1') });
+    pipeline.push({ type: 'event', invoke: c => c.onTrackUnpublished?.(audioFrame('p1', 'sid1').track) });
+    pipeline.push({ type: 'audio', frame: audioFrame('p2', 'sid2') });
+    await jest.advanceTimersByTimeAsync(10);
+    expect(sockets).toHaveLength(2);
+    let ended = false;
+    const end = consumer.onSessionEnd().then(() => { ended = true; });
+    sockets[1].handlers.close();
+    await jest.advanceTimersByTimeAsync(10);
+    expect(ended).toBe(false);
+    sockets[0].handlers.message(transcriptMessage('últimas palabras del primer participante', { is_final: true }));
+    sockets[0].handlers.close();
+    await end;
+    expect(results).toContainEqual(expect.objectContaining({ participantId: 'p1', isFinal: true }));
+  } finally {
+    sockets.forEach(s => s.handlers.close?.());
+    await jest.advanceTimersByTimeAsync(5000);
+    await pipeline.close();
+    jest.useRealTimers();
+  }
+});

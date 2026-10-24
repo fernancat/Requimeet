@@ -64,6 +64,7 @@ export class DeepgramConsumer implements MediaConsumer {
   private startedAtMs = 0;
   private readonly retryAt = new Map<string, { at: number; attempts: number }>();
   private readonly deliveries = new Set<Promise<unknown>>();
+  private readonly closingStreams = new Map<TrackStream, Promise<void>>();
   private keepalive: NodeJS.Timeout | null = null;
 
   constructor(
@@ -85,13 +86,18 @@ export class DeepgramConsumer implements MediaConsumer {
       clearInterval(this.keepalive);
       this.keepalive = null;
     }
-    await Promise.all([...this.streams.values()].map(stream => this.closeStream(stream)));
+    for (const stream of this.streams.values()) this.closeStream(stream);
+    await Promise.all([...this.closingStreams.values()]);
     await Promise.allSettled([...this.deliveries]);
   }
 
-  async onTrackUnpublished(track: TrackRef): Promise<void> {
+  onTrackUnpublished(track: TrackRef): void {
     const stream = this.streams.get(track.trackSid);
-    if (stream) await this.closeStream(stream);
+    if (stream) {
+      // Detach immediately: draining this speaker must not stall the shared audio queue.
+      this.streams.delete(track.trackSid);
+      void this.closeStream(stream);
+    }
   }
 
   onAudioFrame(frame: AudioFrame): void {
@@ -275,19 +281,28 @@ export class DeepgramConsumer implements MediaConsumer {
     void promise.finally(() => this.deliveries.delete(promise)).catch(() => this.logger('No se pudo entregar transcripción'));
   }
 
-  private async closeStream(stream: TrackStream): Promise<void> {
-    if (stream.closing) return;
+  private closeStream(stream: TrackStream): Promise<void> {
+    const existing = this.closingStreams.get(stream);
+    if (existing) return existing;
     stream.closing = true;
-    await new Promise<void>(resolve => {
-      const timer = setTimeout(() => { this.emitFinal(stream); stream.socket.close(); resolve(); }, 5000);
+    const closing = new Promise<void>(resolve => {
+      const timer = setTimeout(() => {
+        try { this.emitFinal(stream); stream.socket.close(); }
+        catch { this.logger("Deepgram: fallo al cerrar el stream agotado"); }
+        finally { resolve(); }
+      }, 5000);
       stream.done = () => { clearTimeout(timer); resolve(); };
       try {
         if (stream.socket.readyState === undefined) { this.emitFinal(stream); stream.socket.close(); stream.done(); }
         else if (stream.socket.readyState === WebSocket.OPEN) stream.socket.send('{"type":"CloseStream"}');
         else if (stream.socket.readyState === WebSocket.CLOSED) stream.done();
       } catch { stream.done(); }
+    }).finally(() => {
+      if (this.streams.get(stream.track.trackSid) === stream) this.streams.delete(stream.track.trackSid);
+      this.closingStreams.delete(stream);
     });
-    if (this.streams.get(stream.track.trackSid) === stream) this.streams.delete(stream.track.trackSid);
+    this.closingStreams.set(stream, closing);
+    return closing;
   }
 
   private pingIdleStreams(): void {

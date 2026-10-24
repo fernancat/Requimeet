@@ -5,13 +5,16 @@ export class FrameBuffer<T> {
   private closed = false;
   dropped = 0;
 
-  constructor(private readonly capacity = 50) {}
+  constructor(private readonly capacity = 50, private readonly canDrop: (item: T) => boolean = () => true) {}
 
   push(item: T): void {
     if (this.closed) return;
     this.items.push(item);
     while (this.items.length > this.capacity) {
-      this.items.shift();
+      const index = this.items.findIndex(this.canDrop);
+      // Lifecycle events must survive media backpressure, even if only events remain.
+      if (index === -1) break;
+      this.items.splice(index, 1);
       this.dropped += 1;
     }
     this.waiting?.();
