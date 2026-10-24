@@ -191,3 +191,11 @@ El harness verifica que la siguiente pregunta no aparezca durante el audio ni co
 data-speaking/data-turn-held activos. Para el segundo turno preparar un WAV que
 formule la pregunta realmente mostrada y la responda; una pregunta pregrabada
 distinta no prueba correctamente el reconocimiento de ese seguimiento.
+
+### Detecciones parciales de Brody
+
+Una detección de pregunta con referencia conocida pero sin cita literal válida,
+fuera del intervalo elegible o atribuida a un invitado se descarta sin fallar
+la extracción del lote. No marca la pregunta como realizada ni habilita una
+respuesta automática dependiente. Las referencias desconocidas siguen rechazándose.
+La regresión cubre extracción válida junto con detecciones inválidas por autor y cita.

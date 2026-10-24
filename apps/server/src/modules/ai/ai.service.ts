@@ -335,6 +335,16 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
       checkSources(item.sourceIds, allowed);
     const allSegments = [...input.segments, ...input.context];
     const detections = new Map<string, { sourceId: string; quote: string; at: number }>();
+    result.askedQuestions = result.askedQuestions.filter(asked => {
+      const question = input.questions.find(q => q.id === asked.questionId);
+      const source = allSegments.find(s => s.id === asked.sourceId);
+      // Keep unknown references for strict validation; discard unsupported recognition
+      // of a known question without blocking unrelated valid extraction.
+      if (!question || !source) return true;
+      return question.eligibleSourceIds.includes(asked.sourceId) &&
+        source.speakerRole === 'host' && source.text.includes(asked.quote) &&
+        Number.isFinite(source.createdAtMs);
+    });
     for (const asked of result.askedQuestions) {
       const question = input.questions.find(q => q.id === asked.questionId);
       const source = allSegments.find(s => s.id === asked.sourceId);

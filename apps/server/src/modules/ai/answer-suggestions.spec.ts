@@ -128,6 +128,21 @@ describe('respuestas habladas de Brody', () => {
     expect((await prisma.question.findUniqueOrThrow({ where: { id: question.id } })).status).toBe('PENDING');
   });
 
+  it.each(['guest', 'quote'])('conserva extracción válida al descartar detección incorrecta: %s', async (reason) => {
+    const { meeting, question, segment, caller } = await setup(false);
+    if (reason === 'guest') await prisma.participant.update({ where: { id: segment.participantId! }, data: { role: 'guest' } });
+    generate.mockResolvedValue({
+      requirements: [{ text: 'Solo los administradores pueden aprobar.', sourceIds: [segment.id] }], questions: [],
+      askedQuestions: [{ questionId: question.id, sourceId: segment.id, quote: reason === 'quote' ? 'cita inexistente' : segment.text }],
+      answerSuggestions: [{ questionId: question.id, text: 'Administradores.', sourceIds: [segment.id], clarity: 'clear', quotes: [{ sourceId: segment.id, text: segment.text }] }],
+    });
+    const { job } = await ai.analyze(meeting.code, caller); await ai.processNext();
+    expect((await prisma.aiJob.findUniqueOrThrow({ where: { id: job!.id } })).status).toBe('completed');
+    const saved = await prisma.question.findUniqueOrThrow({ where: { id: question.id } });
+    expect(saved.status).toBe('PENDING'); expect(saved.answerSuggestion).toBeNull();
+    expect(await prisma.requirement.count({ where: { meetingId: meeting.id } })).toBe(1);
+  });
+
   it('permite revisar explícitamente una pregunta sin respuesta con segmentos ya analizados', async () => {
     const { meeting, question, segment, caller } = await setup();
     await prisma.transcriptSegment.update({ where: { id: segment.id }, data: { analyzedRevision: segment.revision } });
