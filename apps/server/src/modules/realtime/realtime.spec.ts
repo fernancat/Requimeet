@@ -1,3 +1,4 @@
+import { LivekitRoomService } from '../livekit/livekit-room.service';
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { AddressInfo } from 'node:net';
@@ -38,6 +39,10 @@ describe('RealtimeGateway (integracion)', () => {
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
+    }).overrideProvider(LivekitRoomService).useValue({
+      removeParticipant: jest.fn().mockResolvedValue(undefined),
+      deleteRoom: jest.fn().mockResolvedValue(undefined),
+      muteMicrophone: jest.fn().mockResolvedValue({ muted: true }),
     }).compile();
     app = moduleRef.createNestApplication();
     app.setGlobalPrefix('api');

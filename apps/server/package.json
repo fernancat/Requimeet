@@ -61,6 +61,9 @@
       "^.+\\.(t|j)s$": "ts-jest"
     },
     "testEnvironment": "node",
-    "maxWorkers": 1
+    "maxWorkers": 1,
+    "setupFiles": [
+      "<rootDir>/test-utils/env.ts"
+    ]
   }
 }
