@@ -43,7 +43,7 @@ export class ProcessingOrchestrator {
   }
 
   @OnEvent(DOMAIN_EVENTS.meetingStarted)
-  async onMeetingStarted(payload: MeetingLifecyclePayload): Promise<void> {
+  async onMeetingStarted(payload: MeetingLifecyclePayload, restart = false): Promise<void> {
     if (!this.secret || !this.apiKey || !this.apiSecret) {
       this.logger.warn('credenciales internas/LiveKit ausentes: processor no arranca');
       return;
@@ -62,6 +62,7 @@ export class ProcessingOrchestrator {
       hidden: true,
     });
     const request: StartProcessingRequest = {
+      restart,
       meetingId: payload.meetingId,
       startedAtMs: payload.startedAtMs,
       roomName: payload.code,
@@ -73,6 +74,7 @@ export class ProcessingOrchestrator {
       try {
         const res = await fetch(`${this.processorUrl}/sessions`, {
           method: 'POST',
+          signal: AbortSignal.timeout(30000),
           headers: {
             'Content-Type': 'application/json',
             'x-internal-secret': this.secret,

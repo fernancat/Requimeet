@@ -90,6 +90,18 @@ describe('DeepgramConsumer', () => {
     expect(sockets[0].sent[0]).toBeInstanceOf(Buffer);
   });
 
+  it('conserva dos segundos de PCM mientras abre el websocket y acota la memoria', () => {
+    let open: (() => void) | undefined;
+    const sent: Buffer[] = [];
+    const socket = { readyState: 0, on: (event: string, fn: () => void) => { if (event === 'open') open = fn; }, send: (bytes: Buffer) => sent.push(bytes), close: () => {} };
+    const consumer = new DeepgramConsumer('m', 'key', () => {}, () => {}, () => socket as unknown as DeepgramSocket);
+    for (let i = 0; i < 250; i++) consumer.onAudioFrame(audioFrame('p', 'sid'));
+    expect(sent).toHaveLength(0);
+    socket.readyState = 1; open!();
+    expect(sent).toHaveLength(200);
+    expect(sent.reduce((n, b) => n + b.length, 0)).toBe(48000 * 2 * 2);
+  });
+
   it('parciales reemplazan al anterior via replacesResultId y final cierra la utt', () => {
     const results: ProcessingResult[] = [];
     const consumer = new DeepgramConsumer('m1', 'key', (r) => results.push(r), () => {}, factory);

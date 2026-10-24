@@ -287,3 +287,14 @@ antes de ese intento; puede incluir intentos previos), firstAnswerMs,
 firstQuestionMs y totalMs desde el comienzo del intento. Los hitos de respuesta/
 pregunta corresponden a arrays recibidos/validados, no a pintura del navegador;
 para medir el recorrido completo se utiliza el harness de voz.
+
+#### Reconciliación del processor
+
+`ProcessingRecoveryService` contrasta el inventario de pistas del SFU con
+`ProcessingSessionInfo.audioTrackSids`. Una etiqueta `connected` por sí sola no
+prueba que la sesión siga recibiendo nuevas publicaciones. Tras dos muestras
+inconsistentes, la recuperación reemite un token y reemplaza la sesión con el
+mismo origen temporal. Las llamadas externas y el cierre tienen límites; las
+transiciones por reunión se serializan para evitar procesadores duplicados.
+
+El audio para reconocimiento se remuestrea en el SDK nativo a 16 kHz mono (PCM16): reduce de 768 a 256 kbit/s la subida por pista a Deepgram. El audio de la llamada conserva su configuración original.

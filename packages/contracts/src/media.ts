@@ -118,6 +118,8 @@ export interface ProcessingResult {
 
 /** Peticion del backend al processor para iniciar procesamiento. */
 export interface StartProcessingRequest {
+  /** Recuperación explícita tras contrastar con el SFU. */
+  restart?: boolean;
   startedAtMs?: number;
   meetingId: string;
   /** Nombre de la sala en LiveKit (= meeting code). */
@@ -134,6 +136,7 @@ export interface ProcessingSessionInfo {
   roomName: string;
   startedAtMs: number;
   subscribedTracks: number;
+  audioTrackSids?: string[];
   /** Estado de conexion del processor a LiveKit. */
   connectionState: 'connecting' | 'connected' | 'reconnecting' | 'disconnected';
 }

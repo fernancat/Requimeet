@@ -1,3 +1,4 @@
+import { ProcessingRecoveryService } from './processing-recovery.service';
 import { Module } from '@nestjs/common';
 import { RealtimeModule } from '../realtime/realtime.module';
 import { InternalProcessingController } from './internal-processing.controller';
@@ -8,6 +9,6 @@ import { TranscriptsModule } from '../transcripts/transcripts.module';
 @Module({
   imports: [RealtimeModule, TranscriptsModule],
   controllers: [InternalProcessingController],
-  providers: [ProcessingOrchestrator, InternalSecretGuard],
+  providers: [ProcessingRecoveryService, ProcessingOrchestrator, InternalSecretGuard],
 })
 export class ProcessingModule {}

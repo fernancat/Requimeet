@@ -19,6 +19,7 @@ import type {
   TrackSource,
   VideoFrame,
 } from '@requimeet/contracts';
+import { withTimeout } from './timeout';
 import { ConsumerPipeline } from './consumer-pipeline';
 
 export type SessionConnectionState = ProcessingSessionInfo['connectionState'];
@@ -77,6 +78,7 @@ export class MediaSession {
       roomName: this.request.roomName,
       startedAtMs: this.startedAtMs,
       subscribedTracks: this.tracks.size,
+      audioTrackSids: [...this.tracks.values()].filter(t => t.ref.kind === 'audio').map(t => t.ref.trackSid),
       connectionState: this.state,
     };
   }
@@ -92,6 +94,10 @@ export class MediaSession {
     this.wireRoomEvents(room);
     try {
       await room.connect(this.request.livekitUrl, this.request.processorToken);
+      if (this.stopping) {
+        await withTimeout(room.disconnect(), 3000, 'Late connection cleanup timeout').catch(() => {});
+        throw new Error('Session stopped during connection');
+      }
       this.state = 'connected';
       this.logger(`sesion ${this.meetingId}: conectada a ${this.request.roomName}`);
     } catch (error) {
@@ -114,14 +120,14 @@ export class MediaSession {
     }
     this.tracks.clear();
     try {
-      await this.room?.disconnect();
+      await withTimeout(this.room?.disconnect() ?? Promise.resolve(), 3000, 'LiveKit disconnect timeout');
     } catch (error) {
       this.logger(`sesion ${this.meetingId}: error en disconnect ${String(error)}`);
     }
     this.dispatchEvent((c) =>
       c.onSessionEnd?.({ meetingId: this.meetingId, endedAtMs: Date.now(), reason }),
     );
-    await Promise.all(this.pipelines.map((p) => p.close()));
+    await withTimeout(Promise.all(this.pipelines.map((p) => p.close())), 8000, 'Consumer drain timeout').catch(error => this.logger(String(error)));
     this.logger(`sesion ${this.meetingId}: detenida (${reason})`);
   }
 
@@ -216,7 +222,9 @@ export class MediaSession {
     this.mediaTimeByTrack.set(sid, 0);
 
     if (isAudio) {
-      const stream = new AudioStream(track);
+      // Speech recognition needs mono speech-band audio, not 48 kHz playback PCM.
+      // Native resampling cuts each Deepgram upstream from 768 to 256 kbit/s.
+      const stream = new AudioStream(track, { sampleRate: 16000, numChannels: 1 });
       this.tracks.set(sid, {
         ref,
         cancel: () => void stream.cancel().catch(() => {}),

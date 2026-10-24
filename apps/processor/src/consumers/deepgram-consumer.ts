@@ -12,7 +12,8 @@ export interface DeepgramSocket {
   close(): void;
   on(event: 'message', listener: (data: { toString(): string }) => void): void;
   readonly readyState?: number;
-  on(event: 'open' | 'error' | 'close', listener: () => void): void;
+  on(event: 'open' | 'close', listener: () => void): void;
+  on(event: 'error', listener: (error?: { message?: string }) => void): void;
 }
 
 export type DeepgramSocketFactory = (
@@ -33,6 +34,8 @@ interface TrackStream {
   segmentId: string;
   revision: number;
   pending: Buffer[];
+  pendingBytes: number;
+  overflowReported: boolean;
   offsetMs: number;
   trackOffsetMs: number;
   closing: boolean;
@@ -53,7 +56,7 @@ const ENDPOINTING_MS = 300;
 const KEEPALIVE_MS = 5_000;
 
 function defaultOpenSocket(url: string, headers: Record<string, string>): DeepgramSocket {
-  return new WebSocket(url, { headers });
+  return new WebSocket(url, { headers, handshakeTimeout: 8000 });
 }
 
 export class DeepgramConsumer implements MediaConsumer {
@@ -109,8 +112,16 @@ export class DeepgramConsumer implements MediaConsumer {
     if (stream.closing) return;
     if (stream.socket.readyState === undefined || stream.socket.readyState === WebSocket.OPEN) stream.socket.send(bytes);
     else {
-      if (stream.pending.length >= 50) { stream.pending.shift(); this.logger('Deepgram: buffer lleno; audio descartado'); }
       stream.pending.push(Buffer.from(bytes));
+      stream.pendingBytes += bytes.length;
+      const maxBytes = frame.sampleRateHz * frame.channels * 2 * 2;
+      while (stream.pendingBytes > maxBytes && stream.pending.length) {
+        stream.pendingBytes -= stream.pending.shift()!.length;
+        if (!stream.overflowReported) {
+          stream.overflowReported = true;
+          this.logger(`Deepgram: apertura lenta; buffer de 2 s agotado (${sid})`);
+        }
+      }
     }
   }
 
@@ -130,7 +141,7 @@ export class DeepgramConsumer implements MediaConsumer {
       Authorization: `Token ${this.apiKey}`,
     });
     const stream: TrackStream = {
-      socket, segmentId: randomUUID(), revision: 0, pending: [], closing: false,
+      socket, segmentId: randomUUID(), revision: 0, pending: [], pendingBytes: 0, overflowReported: false, closing: false,
       offsetMs: this.startedAtMs ? Math.max(0, frame.receivedAtMs - this.startedAtMs) : 0,
       trackOffsetMs: frame.mediaTimeMs,
       track: frame.track,
@@ -147,9 +158,15 @@ export class DeepgramConsumer implements MediaConsumer {
       this.deliver({ resultId: randomUUID(), meetingId: this.meetingId, kind: 'analysis', isFinal: false, createdAtMs: Date.now(), payload: { processingStatus: 'connected' } });
       this.retryAt.delete(frame.track.trackSid);
       for (const bytes of stream.pending.splice(0)) socket.send(bytes);
+      stream.pendingBytes = 0;
       if (stream.closing) socket.send('{"type":"CloseStream"}');
     });
-    socket.on('error', () => { try { socket.close(); } catch { /* already closed */ } });
+    socket.on('error', (error) => {
+      const status = error?.message?.match(/Unexpected server response: (\d{3})/)?.[1];
+      const reason = status ? `HTTP ${status}` : /timed out/i.test(error?.message ?? '') ? 'timeout de apertura' : 'error de transporte';
+      this.logger(`Deepgram: ${reason} (${stream.track.trackSid})`);
+      try { socket.close(); } catch { /* already closed */ }
+    });
     socket.on('close', () => {
       this.emitFinal(stream);
       if (this.streams.get(stream.track.trackSid) === stream) this.streams.delete(stream.track.trackSid);

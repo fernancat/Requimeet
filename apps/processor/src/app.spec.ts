@@ -120,6 +120,18 @@ describe('API interna del processor', () => {
     expect((await (await call('GET', '/sessions')).json()) as unknown[]).toHaveLength(0);
   });
 
+  it('recupera una sesión aparentemente conectada y serializa arranques concurrentes', async () => {
+    const before = created.length;
+    await Promise.all([call('POST', '/sessions', request), call('POST', '/sessions', request)]);
+    expect(created.length).toBe(before + 1);
+    const old = created[created.length - 1];
+    const response = await call('POST', '/sessions', { ...request, restart: true });
+    expect(response.status).toBe(201);
+    expect(old.stopped).toBe(1);
+    expect(created.length).toBe(before + 2);
+    await call('DELETE', '/sessions/m1');
+  });
+
   it('body invalido -> 400', async () => {
     const res = await call('POST', '/sessions', { meetingId: 'x' });
     expect(res.status).toBe(400);
