@@ -274,7 +274,10 @@ Brody reconoce «¿A qué se dedica tu empresa?» como la pregunta inicial
 «Para empezar, ¿a qué se dedica la empresa?», sin exigir leer la introducción.
 No se usan coincidencias parciales de tema para marcar una pregunta realizada.
 `Analizar ahora` permite revisar también preguntas pendientes no detectadas.
-La política de análisis v6 utiliza razonamiento bajo en DeepSeek V4 Flash.
+La política de análisis v8 utiliza razonamiento bajo en DeepSeek V4 Flash.
+Para preguntas ya realizadas usa una petición centrada en la respuesta y el
+seguimiento, conservando las mismas validaciones de citas, versiones y fuentes.
+Publica respuestas completas del stream sin esperar el array askedQuestions.
 
 Cuando Deepgram cambia un provisional al emitir el final, el anterior queda
 conservado en historial y se puede desplegar en Transcripción. Es texto **no

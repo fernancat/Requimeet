@@ -315,4 +315,18 @@ describe('respuestas habladas de Brody', () => {
     expect((await prisma.aiJob.findUniqueOrThrow({ where: { id: job!.id } })).status).toBe('completed');
   });
 
+  it('publica la respuesta de una pregunta realizada antes de recibir el resto de arrays', async () => {
+    const { meeting, question, segment, caller } = await setup();
+    generate.mockImplementation(async (_prompt, input, options) => {
+      expect(input.question.text).toBe(question.text);
+      expect(input.previousQuestions).toBeDefined();
+      const answerSuggestions = [{ questionId: input.question.id, text: 'Los administradores.', sourceIds: [input.segments[0].id], clarity: 'clear', quotes: [{ sourceId: input.segments[0].id, text: segment.text }] }];
+      await options.onPartial({ answerSuggestions });
+      expect((await prisma.question.findUniqueOrThrow({ where: { id: question.id } })).status).toBe('RESOLVED');
+      return { askedQuestions: [], answerSuggestions, requirements: [], questions: [] };
+    });
+    await ai.analyze(meeting.code, caller); await ai.processNext();
+    expect(generate).toHaveBeenCalledTimes(1);
+  });
+
 });

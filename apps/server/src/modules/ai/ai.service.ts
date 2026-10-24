@@ -1,6 +1,6 @@
 import { exactQuestions } from './exact-question';
 import { compactIds } from './compact-ids';
-import { LIVE_ANALYSIS_PROMPT } from './live-analysis.prompt';
+import { LIVE_ANALYSIS_PROMPT, ANSWER_TURN_PROMPT } from './live-analysis.prompt';
 import {
   Injectable,
   OnModuleInit,
@@ -183,7 +183,7 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
       orderBy: { createdAt: 'desc' },
     });
     const input = {
-      policyVersion: 'brody-live-v6',
+      policyVersion: 'brody-live-v8',
       segments,
       context: context.slice().reverse().map(s => ({ id: s.id, text: s.text.slice(0, 3000), revision: s.revision, createdAtMs: s.createdAtMs, speakerRole: s.participant?.role })),
       requirements,
@@ -276,6 +276,14 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
     }
     const wire = compactIds({ ...input, questions: input.questions.map(q =>
       detected.some(d => d.questionId === q.id) ? { ...q, status: 'ASKED' } : q) });
+    const wireInput = wire.input as AnalysisInput;
+    const asked = wireInput.questions.find(q => q.status === 'ASKED');
+    const generationInput = asked ? {
+      question: asked,
+      segments: [...wireInput.segments, ...wireInput.context].sort((a, b) => (a.createdAtMs ?? 0) - (b.createdAtMs ?? 0)),
+      previousQuestions: wireInput.questions.map(q => ({ text: q.text, answer: q.answer, status: q.status })),
+      requirements: wireInput.requirements,
+    } : wire.input;
     const parse = (value: unknown) => {
       const parsed = analysisSchema.parse(wire.expand(value));
       parsed.askedQuestions = [...detected, ...parsed.askedQuestions.filter(q => !detected.some(d => d.questionId === q.questionId))];
@@ -283,11 +291,11 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
     };
     let result = parse(
       await this.router.generate(
-        LIVE_ANALYSIS_PROMPT,
-        wire.input,
+        asked ? ANSWER_TURN_PROMPT : LIVE_ANALYSIS_PROMPT,
+        generationInput,
         { live: true, onPartial: async arrays => {
           // A complete array is an independently validated unit, never token text.
-          if (!Object.hasOwn(arrays, 'askedQuestions')) return;
+          if (!asked && !Object.hasOwn(arrays, 'askedQuestions')) return;
           const ready = parse({ questions: [], ...arrays, requirements: [] });
           const accepted = await this.persistAnalysis(job, input, ready, false);
           if (accepted.answerSuggestions.length && timing.firstAnswerMs === null) timing.firstAnswerMs = Date.now() - startedAt;
