@@ -10,16 +10,23 @@
   --success: #36d6a0;
   --radius: 10px;
   font-family: 'Segoe UI', Roboto, system-ui, sans-serif;
+  font-size: 14px;
 }
 
 * {
   box-sizing: border-box;
 }
 
+html {
+  font-size: 14px;
+}
+
 body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
+  font-size: 14px;
+  line-height: 1.4;
 }
 
 #root {
@@ -53,10 +60,22 @@ body {
 }
 
 h1,
-h2 {
-  margin: 0 0 16px;
-  font-weight: 500;
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin: 0 0 12px;
+  font-weight: 600;
+  line-height: 1.2;
 }
+
+h1 { font-size: 32px; }
+h2 { font-size: 24px; }
+h3 { font-size: 18px; }
+h4 { font-size: 16px; }
+h5 { font-size: 14px; }
+h6 { font-size: 13px; }
 
 .subtitle {
   color: var(--text-dim);
@@ -270,17 +289,44 @@ button.danger {
 }
 
 .room-topbar {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
+  gap: 12px;
   padding: 10px 20px;
   background: var(--bg-card);
+  font-size: 14px;
+}
+
+.room-topbar > .brand {
+  justify-self: start;
+}
+
+.room-topbar > a {
+  justify-self: center;
+  text-align: center;
+  white-space: nowrap;
 }
 
 .topbar-actions {
   display: flex;
   align-items: center;
+  justify-self: end;
   gap: 12px;
+}
+
+.topbar-copy-button {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
+  padding: 0;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #f3f6fb;
+  color: #111827;
 }
 
 .conn-state {
@@ -431,9 +477,19 @@ button.danger {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 8px;
   padding: 6px 10px;
   background: linear-gradient(transparent, rgb(0 0 0 / 70%));
-  font-size: 13px;
+  font-size: 12px;
+}
+
+.tile-label > span {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .badge {
@@ -441,16 +497,26 @@ button.danger {
   padding: 1px 6px;
   border-radius: 4px;
   background: var(--accent-strong);
-  font-size: 11px;
+  font-size: 10px;
 }
 
 .mic-state {
-  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: var(--success);
+  width: 20px;
+  height: 20px;
 }
 
 .mic-state.muted {
   color: var(--danger);
+}
+
+.mini-icon {
+  width: 18px;
+  height: 18px;
+  display: block;
 }
 
 .side-panel {
@@ -614,6 +680,31 @@ button.danger {
 
 .room-controls button:active:not(:disabled) {
   transform: translateY(0);
+}
+
+.room-controls .control-icon-button {
+  width: 52px;
+  min-width: 52px;
+  height: 52px;
+  min-height: 52px;
+  padding: 0;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.room-controls .control-icon {
+  width: 22px;
+  height: 22px;
+  display: block;
+}
+
+.room-controls .control-share.is-sharing {
+  background: #1f5d46;
+  border-color: #2dd28d;
+  color: #d9fff0;
+  box-shadow: 0 0 0 1px rgba(45, 210, 141, 0.38);
 }
 
 .unread-badge {
@@ -1172,6 +1263,7 @@ legend { padding: 0 8px; font-weight: 600; }
 /* Controles de la sala de reuniones */
 .room-controls .control-media {
   background: #29354a;
+  color: #edf5ff;
 }
 
 .room-controls .control-media.danger {
@@ -1396,6 +1488,7 @@ legend { padding: 0 8px; font-weight: 600; }
 
 .login-page .login-header {
   padding: 40px 46px 20px;
+  text-align: center;
 }
 
 .login-page .login-header h1 {
@@ -1404,12 +1497,14 @@ legend { padding: 0 8px; font-weight: 600; }
   font-weight: 750;
   letter-spacing: -1px;
   color: #ffffff;
+  text-align: center;
 }
 
 .login-page .login-header p {
   margin: 0;
   font-size: 15px;
   color: #b9cfff;
+  text-align: center;
 }
 
 .login-page .login-content {
@@ -1426,22 +1521,51 @@ legend { padding: 0 8px; font-weight: 600; }
   font-size: 14px;
   font-weight: 600;
   color: #dce8ff;
+  text-align: center;
+}
+
+.login-page .login-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 52px;
+  margin: 0 0 23px;
+  background: #30415e;
+  border: 1px solid #4b6489;
+  border-radius: 9px;
+}
+
+.login-page .login-field-icon-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  min-width: 42px;
+  color: #d8e8ff;
+  opacity: 0.9;
+}
+
+.login-page .login-field-icon {
+  width: 18px;
+  height: 18px;
+  display: block;
 }
 
 .login-page .login-content input {
   width: 100%;
   min-height: 52px;
-  margin: 0 0 23px;
-  padding: 12px 16px;
-  background: #30415e;
-  border: 1px solid #4b6489;
+  padding: 12px 16px 12px 0;
+  background: transparent;
+  border: none;
   border-radius: 9px;
   color: #ffffff;
   font-size: 15px;
 }
 
 .login-page .login-content input::placeholder {
-  color: #a9bad3;
+  color: #dce8ff;
+  opacity: 0.82;
 }
 
 .login-page .login-content input:focus {
@@ -1518,17 +1642,20 @@ legend { padding: 0 8px; font-weight: 600; }
 
 .register-page .register-header {
   padding: 36px 40px 16px;
+  text-align: center;
 }
 
 .register-page .register-header h1 {
   font-size: 32px;
   font-weight: 700;
   margin: 0 0 8px;
+  text-align: center;
 }
 
 .register-page .register-header p {
   margin: 0;
   font-size: 14px;
+  text-align: center;
 }
 
 .register-page .register-content {
@@ -1544,18 +1671,51 @@ legend { padding: 0 8px; font-weight: 600; }
   font-size: 13px;
   font-weight: 600;
   margin: 0 0 8px;
+  text-align: center;
+}
+
+.register-page .register-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 46px;
+  margin: 0 0 20px;
+  border: 1px solid #506582;
+  border-radius: 8px;
+  background: #303f59;
+}
+
+.register-page .register-field-icon-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  min-width: 42px;
+  color: #d8e8ff;
+  opacity: 0.9;
+}
+
+.register-page .register-field-icon {
+  width: 18px;
+  height: 18px;
+  display: block;
 }
 
 .register-page .register-content input {
   width: 100%;
   min-height: 46px;
-  margin: 0 0 20px;
-  padding: 11px 14px;
-  border: 1px solid #506582;
+  padding: 11px 14px 11px 0;
+  border: none;
   border-radius: 8px;
-  background: #303f59;
+  background: transparent;
   color: #ffffff;
   font-size: 14px;
+}
+
+.register-page .register-content input::placeholder {
+  color: #dce8ff;
+  opacity: 0.82;
 }
 
 .register-page .register-content input:focus {
