@@ -1,3 +1,4 @@
+import { ProviderError } from './provider-error';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { createTestPrisma, cleanDb } from '../../test-utils/test-db';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -191,7 +192,7 @@ describe('respuestas habladas de Brody', () => {
     const result = { askedQuestions: [], requirements: [], questions: [], answerSuggestions: [{ questionId: question.id, text: 'Administradores.', sourceIds: [segment.id], clarity: 'clear', quotes: [{ sourceId: segment.id, text: segment.text }] }] };
     generate.mockImplementationOnce(async (_prompt, _input, options) => {
       await options.onPartial(result);
-      throw new Error('Stream interrumpido');
+      throw new ProviderError('STREAM', 'Stream interrumpido', true);
     }).mockImplementationOnce(async (_prompt, _input, options) => {
       await options.onPartial(result);
       return result;
@@ -202,6 +203,7 @@ describe('respuestas habladas de Brody', () => {
     expect(published.status).toBe('RESOLVED');
     expect((await prisma.aiJob.findUniqueOrThrow({ where: { id: job!.id } })).status).toBe('queued');
     expect((await prisma.transcriptSegment.findUniqueOrThrow({ where: { id: segment.id } })).analyzedRevision).toBe(0);
+    await prisma.aiJob.update({ where: { id: job!.id }, data: { nextAttemptAt: new Date(0) } });
     await ai.processNext();
     const saved = await prisma.question.findUniqueOrThrow({ where: { id: question.id } });
     expect(saved.version).toBe(published.version);
@@ -225,7 +227,7 @@ describe('respuestas habladas de Brody', () => {
     expect(saved.version).toBe(question.version + 1);
   });
 
-  it('reanuda el texto nuevo acumulado cuando un trabajo agota sus reintentos', async () => {
+  it('reanuda texto nuevo tras un fallo terminal sin reintentar el lote inválido', async () => {
     const { meeting, segment, caller } = await setup();
     generate.mockRejectedValue(new Error('Proveedor temporalmente no disponible'));
     await ai.analyze(meeting.code, caller);
@@ -377,6 +379,56 @@ describe('respuestas habladas de Brody', () => {
     generate.mockResolvedValue({ requirements: [], questions: [], askedQuestions: [{ questionId: question.id, sourceId: segment.id, quote: text }] });
     await ai.analyze(meeting.code, caller); await ai.processNext();
     expect((await prisma.question.findUniqueOrThrow({ where: { id: question.id } })).status).toBe('ASKED');
+  });
+
+  it('no reintenta JSON inválido ni deja el trabajo en ejecución', async () => {
+    const { meeting, caller } = await setup();
+    generate.mockRejectedValue(new ProviderError('JSON_FORMAT', 'JSON inválido'));
+    const { job } = await ai.analyze(meeting.code, caller);
+    await ai.processNext(); await ai.processNext();
+    const saved = await prisma.aiJob.findUniqueOrThrow({ where: { id: job!.id } });
+    expect(saved).toMatchObject({ status: 'failed', attempts: 1, error: 'JSON_FORMAT: JSON inválido' });
+    expect(generate).toHaveBeenCalledTimes(1);
+    expect((await ai.list(meeting.code, caller)).activeJob).toBeNull();
+  });
+  it('respeta Retry-After, evita un bucle inmediato y limita a tres intentos', async () => {
+    const { meeting, caller } = await setup();
+    generate.mockRejectedValue(new ProviderError('HTTP_429', 'Límite temporal', true, 60000));
+    const { job } = await ai.analyze(meeting.code, caller);
+    const start = Date.now();
+    await ai.processNext(); await ai.processNext();
+    const first = await prisma.aiJob.findUniqueOrThrow({ where: { id: job!.id } });
+    expect(first.status).toBe('queued'); expect(first.nextAttemptAt.getTime()).toBeGreaterThanOrEqual(start + 60000);
+    expect(generate).toHaveBeenCalledTimes(1);
+    for (let i = 0; i < 2; i++) {
+      await prisma.aiJob.update({ where: { id: job!.id }, data: { nextAttemptAt: new Date(0) } });
+      await ai.processNext();
+    }
+    expect((await prisma.aiJob.findUniqueOrThrow({ where: { id: job!.id } }))).toMatchObject({ status: 'failed', attempts: 3 });
+  });
+  it('reanuda solo el seguimiento tras reiniciar, conservando respuesta e historial guardados', async () => {
+    const { meeting, question, segment, caller } = await setup();
+    generate.mockResolvedValue({ requirements: [], questions: [], answerSuggestions: [{ questionId: question.id, text: 'Administradores.', sourceIds: [segment.id], clarity: 'clear', quotes: [{ sourceId: segment.id, text: segment.text }] }] });
+    followup.mockRejectedValueOnce(new ProviderError('TIMEOUT', 'Tiempo agotado', true));
+    const { job } = await ai.analyze(meeting.code, caller); await ai.processNext();
+    const saved = await prisma.question.findUniqueOrThrow({ where: { id: question.id } });
+    expect(saved.status).toBe('RESOLVED');
+    expect((await prisma.aiJob.findUniqueOrThrow({ where: { id: job!.id } })).output).toMatchObject({ checkpoint: 'interpreted' });
+    ai.onModuleDestroy();
+    ai = new AiService(db, access, { enabled: () => true, generate: (instruction: string, input: unknown, options: unknown) => instruction.startsWith('La respuesta anterior') ? followup(input) : generate(instruction, input, options) } as unknown as OpenRouterService, events);
+    await prisma.aiJob.update({ where: { id: job!.id }, data: { nextAttemptAt: new Date(0) } });
+    await ai.processNext();
+    expect(generate).toHaveBeenCalledTimes(1); expect(followup).toHaveBeenCalledTimes(2);
+    expect((await prisma.question.findUniqueOrThrow({ where: { id: question.id } })).history).toEqual(saved.history);
+    expect((await prisma.aiJob.findUniqueOrThrow({ where: { id: job!.id } })).status).toBe('completed');
+  });
+  it('recupera una ejecución abandonada sin bloquear otras reuniones', async () => {
+    const { meeting, caller } = await setup();
+    generate.mockResolvedValue({ requirements: [], questions: [] });
+    const { job } = await ai.analyze(meeting.code, caller);
+    await prisma.aiJob.update({ where: { id: job!.id }, data: { status: 'running', updatedAt: new Date(Date.now() - 180000) } });
+    await ai.processNext();
+    expect((await prisma.aiJob.findUniqueOrThrow({ where: { id: job!.id } })).status).toBe('completed');
   });
 
 });

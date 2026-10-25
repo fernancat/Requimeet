@@ -339,3 +339,40 @@ incluso si el final llega antes que el parcial. Solo el texto final alimenta IA;
 la interfaz permite consultar la hipótesis anterior sin promoverla a evidencia.
 El detector de preguntas tolera introducciones y determinantes de empresa
 acotados, conservando cita literal, autor y referencias elegibles.
+
+### Frontera de proveedor y recuperación (política v10)
+
+Todas las operaciones IA solicitan `response_format=json_schema`, `strict=true`
+y `provider.require_parameters=true`, derivados de los mismos validadores Zod
+que comprueban el resultado localmente. Las referencias, versiones y reglas de
+negocio siguen validándose en el servidor: un contrato de formato no demuestra
+que una inferencia sea correcta. Se mantiene DeepSeek V4 Flash sin cambiar de
+modelo como fallback. En vivo se prioriza throughput, con preferencias blandas
+p90 de 3 s de latencia y 80 tokens/s; son preferencias, no garantías de servicio.
+
+`model-json.ts` acepta un objeto JSON completo o un único bloque Markdown JSON
+completo. No extrae fragmentos entre prosa, no evalúa código y no completa campos
+ni sintaxis truncada. Streaming y respuestas completas comparten esta frontera.
+Los arrays completos del stream pasan validación estructural antes de persistir;
+solo un cierre `stop` válido completa la ejecución. Rechazos, truncamiento y errores
+SSE se distinguen del éxito, incluso cuando HTTP fue 200. Los errores guardados
+usan códigos y mensajes seguros, sin copiar texto de transcripciones.
+
+La cola sigue siendo de un único proceso servidor con PostgreSQL. `nextAttemptAt`
+persiste backoff exponencial con jitter y respeta `Retry-After`; solo fallos
+transitorios se reintentan, hasta tres intentos. JSON, esquema, autenticación y
+límites de tokens no se repiten automáticamente con la misma petición. Nuevos
+segmentos pueden crear trabajo nuevo; un fingerprint fallido permanece terminal.
+
+Después de persistir una interpretación completa, `AiJob.output` guarda el
+checkpoint `interpreted`. Si falla el seguimiento, un reintento o reinicio continúa
+allí sin volver a interpretar la respuesta. Versiones y evidencia siguen comprobándose.
+Los claims `running` abandonados, sin dueño local y con más de dos minutos, se
+recuperan; no se interrumpen trabajos del worker activo. Esta coordinación NO
+sustituye un lease distribuido si se despliegan varios servidores.
+
+El estado activo de análisis se consulta independientemente del historial y de
+trabajos de documento/entidades. El frontend distingue ejecución, cola, espera de
+reintento y fallo. `useResource` agrupa ráfagas de eventos en una lectura adicional,
+publica la lectura en curso y limita cada consulta a ocho segundos. Cambiar de
+reunión cancela la lectura anterior, conservando el aislamiento entre salas.

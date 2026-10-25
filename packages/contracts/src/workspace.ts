@@ -16,17 +16,22 @@ export interface QuestionDto {
   evidenceIds: string[];
   version: number;
 }
+export interface AiJobSummary {
+  id: string;
+  kind: string;
+  status: string;
+  error: string | null;
+  createdAt: string;
+  updatedAt: string;
+  attempts?: number;
+  nextAttemptAt?: string;
+}
 export interface AnalysisStatus {
   enabled: boolean;
   model: string;
-  jobs: {
-    id: string;
-    kind: string;
-    status: string;
-    error: string | null;
-    createdAt: string;
-    updatedAt: string;
-  }[];
+  /** Authoritative live-analysis job, independent of historical/artifact jobs. */
+  activeJob?: AiJobSummary | null;
+  jobs: AiJobSummary[];
 }
 export interface WorkspaceChanged {
   code: string;

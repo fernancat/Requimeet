@@ -164,8 +164,10 @@ model AiJob {
   error String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  nextAttemptAt DateTime @default(now())
   @@unique([meetingId, kind, fingerprint])
   @@index([status, createdAt])
+  @@index([status, nextAttemptAt])
 }
 model Question {
   automaticResolution Boolean @default(false)
