@@ -316,6 +316,7 @@ export class ArtifactsService implements OnModuleInit {
     const output = await this.router.generate(
       'Genera un borrador de especificación. JSON {"title":"...","sections":[{"key":"scope","items":[{"text":"...","sourceIds":["id"]}]}],"entities":{"entities":[],"relations":[]}}. Incluye exactamente estas ocho secciones: scope, roles, requirements, business_rules, priorities, acceptance, contradictions, pending. requirements solo incluye aprobados no descartados. Las prioridades y criterios no confirmados se etiquetan como propuesta para revisión. No inventes decisiones. Cada criterio de aceptación referencia su requerimiento. Contradicciones citan las fuentes enfrentadas, sin resolverlas automáticamente. Pendientes incluye requerimientos sin aprobar y preguntas abiertas. Arrays vacíos cuando no haya evidencia. Conserva los IDs de fuentes. El modelo de entidades se incorporará desde el modelo guardado.',
       source,
+      { schema: documentSchema },
     );
     const candidate = output as Record<string, unknown>;
     candidate.entities = source.entities?.content ?? {
@@ -350,6 +351,7 @@ export class ArtifactsService implements OnModuleInit {
     const output = await this.router.generate(
       'Genera un modelo conceptual entidad-relación desde los requerimientos aprobados. JSON {"entities":[{"id":"cliente","name":"Cliente","sourceIds":["id-requerimiento"],"attributes":[{"id":"nombre","name":"nombre","type":"texto","required":true,"identifier":false}]}],"relations":[{"id":"r1","name":"realiza","from":"cliente","to":"pedido","cardinality":"1:1|1:N|N:M","sourceIds":["id-requerimiento"]}]}. Solo entidades fundamentadas; IDs únicos. Si no hay entidades inferibles usa arrays vacíos.',
       { requirements },
+      { schema: entitySchema },
     );
     return this.saveProposal(
       job,

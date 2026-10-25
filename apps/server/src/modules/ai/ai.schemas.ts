@@ -45,3 +45,12 @@ export function checkSources(ids: string[], allowed: Set<string>) {
   if (ids.some((id) => !allowed.has(id)))
     throw new Error('La IA devolvió fuentes desconocidas');
 }
+
+/** Provider contracts are derived from the same runtime validators. */
+export const analysisOutputSchema = z.object({
+  askedQuestions: analysisSchema.shape.askedQuestions,
+  answerSuggestions: analysisSchema.shape.answerSuggestions,
+  questions: analysisSchema.shape.questions,
+  requirements: analysisSchema.shape.requirements,
+}).strict();
+export const followupOutputSchema = analysisOutputSchema.pick({ questions: true, requirements: true });

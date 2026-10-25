@@ -37,4 +37,19 @@ describe('streaming de unidades JSON completas', () => {
     expect(measured).toHaveBeenCalledWith(expect.objectContaining({ completionTokens: 150, reasoningTokens: 100, finishReason: 'stop', firstContentMs: expect.any(Number) }));
   });
 
+  it('acepta cercas Markdown fragmentadas sin esperar el cierre para publicar arrays completos', async () => {
+    const events: unknown[] = [];
+    const output = await readJsonStream(response(chunk('`') + chunk('``json\n{') + chunk('"questions":[]') + chunk('}\n```', 'stop'), 1), async value => { events.push(value); });
+    expect(events).toEqual([{ questions: [] }]);
+    expect(output).toEqual({ questions: [] });
+  });
+  it('no acepta una cerca truncada, contenido adicional ni rechazo del proveedor', async () => {
+    await expect(readJsonStream(response(chunk('```json\n{"questions":[]}', 'stop')), async () => {})).rejects.toThrow('incompleto');
+    await expect(readJsonStream(response(chunk('{"questions":[]} otra cosa', 'stop')), async () => {})).rejects.toThrow('inválido');
+    await expect(readJsonStream(response(chunk('', 'content_filter')), async () => {})).rejects.toThrow('rechazó');
+  });
+  it('clasifica rate limits recibidos después de HTTP 200', async () => {
+    await expect(readJsonStream(response('data: {"error":{"code":429}}\n\n'), async () => {})).rejects.toMatchObject({ retryable: true, code: 'HTTP_429' });
+  });
+
 });
