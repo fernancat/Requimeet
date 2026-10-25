@@ -329,4 +329,54 @@ describe('respuestas habladas de Brody', () => {
     expect(generate).toHaveBeenCalledTimes(1);
   });
 
+  it.each(['host', 'guest'])('resuelve una respuesta directa de %s sin inventar que se leyó la pregunta', async role => {
+    const { meeting, question, segment, caller } = await setup(false);
+    await prisma.participant.update({ where: { id: segment.participantId! }, data: { role } });
+    generate.mockImplementation(async (_prompt, input, options) => {
+      expect(input.question.status).toBe('PENDING');
+      expect(options.turn).toBe(true);
+      return { requirements: [], questions: [], askedQuestions: [], answerSuggestions: [{
+        questionId: input.question.id, text: 'Los administradores.', sourceIds: [input.segments[0].id],
+        clarity: 'clear', quotes: [{ sourceId: input.segments[0].id, text: segment.text }],
+      }] };
+    });
+    await ai.analyze(meeting.code, caller); await ai.processNext();
+    const saved = await prisma.question.findUniqueOrThrow({ where: { id: question.id } });
+    expect(saved.status).toBe('RESOLVED'); expect(saved.automaticResolution).toBe(true);
+    expect(saved.askedAt).toBeNull();
+    expect(JSON.stringify(saved.history)).toContain('direct-answer');
+    expect(JSON.stringify(saved.history)).not.toContain('question-detected');
+    expect(await prisma.question.count({ where: { meetingId: meeting.id, status: 'PENDING' } })).toBe(1);
+  });
+  it('conserva una duda directa como propuesta sin avanzar ni afirmar que se preguntó', async () => {
+    const { meeting, question, segment, caller } = await setup(false);
+    generate.mockResolvedValue({ requirements: [], questions: [], answerSuggestions: [{
+      questionId: question.id, text: 'Quizá administradores.', sourceIds: [segment.id], clarity: 'uncertain',
+      reason: 'No hay decisión.', quotes: [{ sourceId: segment.id, text: segment.text }],
+    }] });
+    await ai.analyze(meeting.code, caller); await ai.processNext();
+    const saved = await prisma.question.findUniqueOrThrow({ where: { id: question.id } });
+    expect(saved.status).toBe('PENDING'); expect(saved.answer).toBe(''); expect(saved.askedAt).toBeNull();
+    expect(saved.answerSuggestion).toMatchObject({ reason: 'No hay decisión.' });
+    expect(followup).not.toHaveBeenCalled();
+  });
+  it('no acepta una respuesta directa con una cita inventada', async () => {
+    const { meeting, question, segment, caller } = await setup(false);
+    generate.mockResolvedValue({ requirements: [], questions: [], answerSuggestions: [{
+      questionId: question.id, text: 'El director.', sourceIds: [segment.id], clarity: 'clear',
+      quotes: [{ sourceId: segment.id, text: 'El director aprueba.' }],
+    }] });
+    await ai.analyze(meeting.code, caller); await ai.processNext();
+    const saved = await prisma.question.findUniqueOrThrow({ where: { id: question.id } });
+    expect(saved.status).toBe('PENDING'); expect(saved.answerSuggestion).toBeNull();
+  });
+  it('detecta una paráfrasis por IA sin exigir similitud literal en el servidor', async () => {
+    const { meeting, question, segment, caller } = await setup(false);
+    const text = '¿A quién le corresponde dar el visto bueno?';
+    await prisma.transcriptSegment.update({ where: { id: segment.id }, data: { text } });
+    generate.mockResolvedValue({ requirements: [], questions: [], askedQuestions: [{ questionId: question.id, sourceId: segment.id, quote: text }] });
+    await ai.analyze(meeting.code, caller); await ai.processNext();
+    expect((await prisma.question.findUniqueOrThrow({ where: { id: question.id } })).status).toBe('ASKED');
+  });
+
 });

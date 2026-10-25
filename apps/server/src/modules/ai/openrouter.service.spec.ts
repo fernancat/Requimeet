@@ -19,4 +19,17 @@ describe('OpenRouter live latency settings', () => {
     const document = JSON.parse(fetchMock.mock.calls[2][1].body);
     expect(document.provider).toBeUndefined(); expect(document.reasoning).toBeUndefined(); expect(document.max_tokens).toBe(7000);
   });
+  it('uses a bounded non-reasoning budget only for the focused conversational turn', async () => {
+    const fetchMock = jest.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: [{ id: 'deepseek/deepseek-v4-flash' }] }) })
+      .mockResolvedValue({ ok: true, json: async () => ({ choices: [{ message: { content: '{}' }, finish_reason: 'stop' }] }) });
+    global.fetch = fetchMock;
+    const service = new OpenRouterService(new ConfigService({ OPENROUTER_API_KEY: 'test-key' }));
+    await service.generate('turn', {}, { live: true, turn: true });
+    const body = JSON.parse(fetchMock.mock.calls[1][1].body);
+    expect(body.reasoning).toEqual({ effort: 'none' });
+    expect(body.max_tokens).toBe(1800);
+    expect(body.model).toBe('deepseek/deepseek-v4-flash');
+  });
+
 });

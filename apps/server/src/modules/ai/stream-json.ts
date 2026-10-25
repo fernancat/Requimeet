@@ -35,20 +35,27 @@ export function completeArrays(text: string): Record<string, unknown[]> {
   return result;
 }
 
-export async function readJsonStream(response: Response, partial: (value: Record<string, unknown[]>) => Promise<void>) {
+export type StreamMetrics = { firstContentMs: number | null; totalMs: number; completionTokens: number | null; reasoningTokens: number | null; finishReason: string };
+export async function readJsonStream(response: Response, partial: (value: Record<string, unknown[]>) => Promise<void>,
+  measured?: (metrics: StreamMetrics) => void, startedAt = Date.now()) {
   if (!response.body) throw new Error('El proveedor no devolvió stream');
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '', content = '', published = '', finish = '';
+  let firstContentMs: number | null = null, completionTokens: number | null = null, reasoningTokens: number | null = null;
   async function event(frame: string) {
     const data = frame.split('\n').filter(line => line.startsWith('data:')).map(line => line.slice(5).trimStart()).join('\n');
     if (!data || data === '[DONE]') return;
     const chunk = JSON.parse(data);
+    if (typeof chunk.usage?.completion_tokens === 'number') completionTokens = chunk.usage.completion_tokens;
+    if (typeof chunk.usage?.completion_tokens_details?.reasoning_tokens === 'number') reasoningTokens = chunk.usage.completion_tokens_details.reasoning_tokens;
     if (chunk.error) throw new Error('El proveedor interrumpió el stream');
     const choice = chunk.choices?.[0];
     if (choice?.finish_reason) finish = choice.finish_reason;
-    if (finish === 'length' || finish === 'error') throw new Error('Respuesta incompleta del proveedor');
+    if (finish === 'length') throw new Error('Respuesta incompleta del proveedor: límite de tokens (incluye razonamiento)');
+    if (finish === 'error') throw new Error('Respuesta incompleta del proveedor: error de generación');
     if (typeof choice?.delta?.content !== 'string') return;
+    if (choice.delta.content && firstContentMs === null) firstContentMs = Date.now() - startedAt;
     content += choice.delta.content;
     if (content.length > 200000) throw new Error('Respuesta demasiado grande');
     const arrays = completeArrays(content);
@@ -71,5 +78,8 @@ export async function readJsonStream(response: Response, partial: (value: Record
     if (buffer.trim()) await event(buffer);
     if (finish !== 'stop') throw new Error('Stream finalizado sin confirmación de cierre');
     return JSON.parse(content);
-  } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
+  } finally {
+    measured?.({ firstContentMs, totalMs: Date.now() - startedAt, completionTokens, reasoningTokens, finishReason: finish });
+    await reader.cancel().catch(() => {}); reader.releaseLock();
+  }
 }

@@ -29,4 +29,12 @@ describe('streaming de unidades JSON completas', () => {
     expect(wire.expand(wire.input)).toEqual(original);
     expect(wire.expand({ questionId: 'q1', sourceIds: ['s1'], quotes: [{ sourceId: 's1', text: 's1' }] })).toEqual({ questionId: 'question-long', sourceIds: ['uuid-long'], quotes: [{ sourceId: 'uuid-long', text: 's1' }] });
   });
+  it('mide primer contenido y consumo sin publicar el razonamiento como respuesta', async () => {
+    const measured = jest.fn();
+    const usage = 'data: ' + JSON.stringify({ choices: [], usage: { completion_tokens: 150, completion_tokens_details: { reasoning_tokens: 100 } } }) + '\n\n';
+    const reasoning = 'data: ' + JSON.stringify({ choices: [{ delta: { reasoning: 'internal' } }] }) + '\n\n';
+    await readJsonStream(response(reasoning + chunk('{"questions":[]}', 'stop') + usage), async () => {}, measured);
+    expect(measured).toHaveBeenCalledWith(expect.objectContaining({ completionTokens: 150, reasoningTokens: 100, finishReason: 'stop', firstContentMs: expect.any(Number) }));
+  });
+
 });
