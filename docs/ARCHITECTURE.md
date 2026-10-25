@@ -192,12 +192,32 @@ correcciones o cambios de rumbo, no para el camino habitual de la entrevista.
 
 ### Análisis breve durante la conversación
 
-El análisis en vivo usa el mismo `deepseek/deepseek-v4-flash` con
-`reasoning.effort=low` y hasta 3000 tokens de salida; las generaciones de documento
-y entidades conservan la configuración anterior. Desactivar el razonamiento
-produjo falsos negativos con respuestas elípticas en la comparación real del
-2026-10-24. Se conserva razonamiento bajo para no sacrificar comprensión. Referencia del parámetro:
-https://openrouter.ai/docs/guides/best-practices/reasoning-tokens.
+La política v9 conserva `deepseek/deepseek-v4-flash`. El turno activo, tanto
+PENDING como ASKED, usa una interpretación semántica breve con
+`reasoning.effort=none`, hasta 1800 tokens y timeout de 12 segundos por petición.
+El análisis general sin turno activo conserva `low`/3000; documentos y entidades
+no cambian. El razonamiento comparte el presupuesto de salida: en una comparación
+real, `low` agotó 3000 tokens en 26,3 s sin devolver contenido y terminó en
+`length`. La configuración rápida se validó con un prompt específico de conversación,
+no quitando razonamiento al prompt general anterior.
+Referencia: https://openrouter.ai/docs/guides/best-practices/reasoning-tokens.
+
+Una pregunta reformulada se detecta por intención y cita literal. La coincidencia
+local exacta es solo un atajo. Una respuesta directa a la sugerencia activa puede
+resolver PENDING sin fingir que se leyó la pregunta: conserva `askedAt=null` y
+registra `direct-answer`. Las dudas quedan como propuesta, con citas y fuentes
+confirmadas posteriores a la creación de la pregunta. Se mantienen el control de
+versión y la protección de cambios humanos. Detecciones inválidas no habilitan
+esta ruta. Otras preguntas pendientes no se resuelven como efectos laterales.
+
+La interpretación publica la respuesta antes del seguimiento. Si no queda una
+pregunta abierta, otra petición breve genera una pregunta de continuación y
+necesidades explícitas nuevas. Se conserva contexto, preguntas anteriores y
+requerimientos; no se inventan necesidades a partir de la actividad comercial.
+La interfaz sigue esperando 900 ms de pausa antes de cambiar la pregunta visible.
+`timing.provider` conserva tiempo al primer contenido, duración, tokens de salida,
+tokens de razonamiento y motivo de finalización del stream, sin registrar secretos
+ni razonamiento interno. El error distingue límite de tokens de error de generación.
 
 `live-analysis.prompt.ts` prioriza evaluar preguntas ASKED antes de abrir temas.
 Ordena el contexto cronológicamente y pide interpretar fragmentos consecutivos
@@ -205,7 +225,7 @@ como una respuesta, sin exigir datos no solicitados por la pregunta. Limita nuev
 preguntas a una por lote y requerimientos a cinco. Se mantienen citas verificadas,
 control de revisión y confirmación para incertidumbre real. El perfil de análisis
 forma parte de la huella del trabajo (`policyVersion`). Un análisis explícito puede
-revisitar finales ya analizados cuando queda una pregunta ASKED sin respuesta;
+revisitar finales ya analizados cuando queda una pregunta PENDING o ASKED sin respuesta;
 la misma huella sigue evitando duplicados.
 
 

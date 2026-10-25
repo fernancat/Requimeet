@@ -274,9 +274,10 @@ Brody reconoce «¿A qué se dedica tu empresa?» como la pregunta inicial
 «Para empezar, ¿a qué se dedica la empresa?», sin exigir leer la introducción.
 No se usan coincidencias parciales de tema para marcar una pregunta realizada.
 `Analizar ahora` permite revisar también preguntas pendientes no detectadas.
-La política de análisis v8 utiliza razonamiento bajo en DeepSeek V4 Flash.
-Para preguntas ya realizadas usa una petición centrada en la respuesta y el
-seguimiento, conservando las mismas validaciones de citas, versiones y fuentes.
+La política v9 utiliza interpretación semántica del turno activo con DeepSeek V4
+Flash sin razonamiento extendido. Reconoce paráfrasis y respuestas directas,
+conservando validaciones de citas, versiones y fuentes. El seguimiento se genera
+después de guardar la respuesta; no se exige leer la sugerencia literalmente.
 Publica respuestas completas del stream sin esperar el array askedQuestions.
 
 Cuando Deepgram cambia un provisional al emitir el final, el anterior queda
@@ -285,3 +286,27 @@ confirmado**: no se concatena al final ni se usa para aprobar respuestas.
 La frase sintética «Mi empresa se dedica a asuntos jurídicos» salió completa
 con Nova-2 y Nova-3; esa prueba no reproduce por sí sola la pérdida reportada
 en el micrófono real ni justifica cambiar de modelo automáticamente.
+
+### Verificación de turnos semánticos (2026-10-24)
+
+- Comparación real con el mismo contexto: perfil low/3000 terminó en `length`
+  tras 26,3 s y sin JSON; none/1800 completó en 3,7 s. No se cambió de modelo.
+- Prueba integrada con PostgreSQL de pruebas y OpenRouter real, sin tocar reuniones
+  del usuario: paráfrasis detectada en 0,91 s; respuesta a pregunta reformulada y
+  siguiente pregunta persistidas en 1,85 s; respuesta directa fragmentada sin leer
+  pregunta y seguimiento en 2,67 s. La actividad comercial no creó un requerimiento;
+  la petición explícita de registrar datos sí produjo uno.
+- Son tiempos desde texto confirmado hasta persistencia, no desde el micrófono ni
+  hasta el render del navegador. Se conservan la captura/endpointing de Deepgram,
+  agrupación de 400 ms, selección de cola y pausa visual de 900 ms (pueden solaparse).
+- Hubo un timeout aislado del proveedor durante las pruebas previas; estas muestras
+  no constituyen una garantía de latencia ni un percentil. El perfil conversacional
+  limita cada petición a 12 s y mantiene los reintentos acotados existentes.
+- Pruebas automatizadas cubren paráfrasis, respuestas directas host/invitado,
+  incertidumbre, citas inventadas, historial sin pregunta ficticia, conflictos de
+  versión y telemetría del stream. No se sustituyen decisiones humanas.
+
+Documentación consultada:
+https://openrouter.ai/docs/guides/best-practices/reasoning-tokens
+https://openrouter.ai/docs/guides/routing/provider-selection
+https://developers.deepgram.com/docs/understand-endpointing-interim-results
