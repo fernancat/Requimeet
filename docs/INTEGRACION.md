@@ -310,3 +310,36 @@ Documentación consultada:
 https://openrouter.ai/docs/guides/best-practices/reasoning-tokens
 https://openrouter.ai/docs/guides/routing/provider-selection
 https://developers.deepgram.com/docs/understand-endpointing-interim-results
+
+### Resiliencia de IA y estados de recuperación (2026-10-24)
+
+Aplicar la migración aditiva `20261025020000_ai_job_retry_schedule` antes de
+reiniciar el servidor. Añade `AiJob.nextAttemptAt` y su índice; conserva trabajos,
+transcripciones, requisitos y artefactos existentes.
+
+Cobertura de regresión independiente de la transcripción concreta:
+
+- JSON normal, BOM, Unicode, bloque Markdown completo y bloques divididos en SSE.
+- Rechazo de prosa, arrays raíz, bloques múltiples/truncados, JSON inválido,
+  estructuras incorrectas, salida excesiva y contenido adicional.
+- HTTP 401/402 sin reintento ciego; 429 con Retry-After; timeouts, rechazo,
+  errores SSE después de HTTP 200 y límite de tres intentos con backoff.
+- Preservación de respuestas publicadas antes de un corte; recuperación del
+  seguimiento desde checkpoint incluso tras recrear el worker; claims abandonados.
+- Estado de análisis separado de documentos; ráfagas de eventos más rápidas que
+  REST, cambio de sala, cancelación y recuperación de errores de consulta.
+
+Validación: 135 tests del servidor, 63 de web y 27 del processor; build del
+monorepo. Llamadas reales de contrato completo y streaming con V4 Flash terminaron
+correctamente en 1,28 y 1,16 s. Una prueba integrada en otra temática (taller de
+bicicletas) recorrió pregunta, respuesta y seguimiento sin errores de formato.
+Con routing por throughput, dos turnos integrados midieron 5,44 y 6,96 s desde
+texto confirmado hasta seguimiento; no son latencias de micrófono a pantalla ni
+percentiles garantizados. El proveedor puede variar y se registra su identificador,
+la generación, tokens y tiempos por petición para diagnosticarlo.
+
+Fuentes oficiales:
+https://openrouter.ai/docs/guides/features/structured-outputs
+https://openrouter.ai/docs/api_reference/errors-and-debugging
+https://openrouter.ai/docs/api_reference/streaming
+https://openrouter.ai/docs/guides/routing/provider-selection

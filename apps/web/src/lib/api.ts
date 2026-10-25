@@ -17,6 +17,7 @@ interface RequestOptions {
   method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
   body?: unknown;
   token?: string | null;
+  signal?: AbortSignal;
 }
 
 export async function api<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -28,6 +29,7 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
   try {
     res = await fetch(`${BASE}${path}`, {
       method: options.method ?? 'GET',
+      ...(options.signal ? { signal: options.signal } : {}),
       headers,
       body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
     });

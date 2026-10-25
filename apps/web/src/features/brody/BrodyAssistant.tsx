@@ -1,3 +1,4 @@
+import { analysisState } from './analysis-state';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import type { AnalysisStatus, QuestionDto, QuestionStatus } from '@requimeet/contracts';
 import type { Requirement } from '../requirements/requirements-api';
@@ -27,8 +28,7 @@ export default function BrodyAssistant({ code, token, canEdit, refreshVersion, i
   const current = nextQuestion(visibleQuestions.data ?? [], deferred, currentId);
   useEffect(() => { setCurrentId(current?.id); }, [current?.id]);
   useUnsaved(Object.values(answers).some(answer => answer.trim().length > 0));
-  const working = analysis.data?.jobs.some(j => j.status === 'running' || j.status === 'queued');
-  const failed = analysis.data?.jobs[0]?.status === 'failed';
+  const { working, failed, retrying, queued, error: analysisFailure } = analysisState(analysis.data);
   const openCount = questions.data?.filter(q => q.status === 'PENDING' || q.status === 'ASKED').length ?? 0;
   const detected = (requirements.data ?? []).filter(r => !r.discarded).slice().reverse();
   const automaticAnswers = (visibleQuestions.data ?? []).filter(q => q.automaticResolution && q.status === 'RESOLVED').slice().reverse();
@@ -78,7 +78,7 @@ export default function BrodyAssistant({ code, token, canEdit, refreshVersion, i
     catch (e) { setError(e instanceof Error ? e.message : 'No se pudo aprobar'); void requirements.reload(); }
     finally { setBusy(false); }
   }
-  const state = visibleQuestions.holding ? 'Te escucho; seguimos cuando hagas una pausa' : interrupted ? 'Audio interrumpido' : !connected ? 'Conectando a la reunión' : !analysis.data ? 'Conectando con el asistente' : !analysis.data.enabled ? 'IA no disponible' : working ? 'Analizando lo conversado…' : current ? 'Tengo una sugerencia' : 'Esperando nuevos resultados';
+  const state = visibleQuestions.holding ? 'Te escucho; seguimos cuando hagas una pausa' : interrupted ? 'Audio interrumpido' : !connected ? 'Conectando a la reunión' : !analysis.data ? 'Conectando con el asistente' : !analysis.data.enabled ? 'IA no disponible' : analysis.error ? 'No puedo consultar el estado del análisis' : failed ? 'El análisis necesita atención' : retrying ? 'Esperando para reintentar el análisis' : queued ? 'Preparando el análisis' : working ? 'Analizando lo conversado…' : current ? 'Tengo una sugerencia' : 'Esperando nuevos resultados';
   return <section className="brody-assistant" data-speaking={speaking} data-turn-held={visibleQuestions.holding} aria-label="Brody, asistente en vivo">
     <header className="brody-heading"><div><h2>Brody</h2><span role="status">{state}</span></div><span className="brody-live">En vivo</span></header>
     <div className="brody-conversation">
@@ -103,11 +103,11 @@ export default function BrodyAssistant({ code, token, canEdit, refreshVersion, i
       </section>}
       {notice && <p className="brody-notice" role="status">{notice}</p>}
       {(error || questions.error || requirements.error || analysis.error) && <p role="alert">{error || questions.error || requirements.error || analysis.error}</p>}
-      {failed && <p role="alert">El último análisis falló. Puedes reintentarlo con «Analizar ahora».</p>}
+      {failed && <p role="alert">{analysisFailure || 'El último análisis falló.'} Los resultados guardados se conservan. Puedes reintentarlo con «Analizar ahora».</p>}
       {current && <div className="brody-next">
         {suggestion && <><p>Para la pregunta: {current.text}</p><p role="status">{suggestion.reason || '¿Esto refleja lo acordado? Confírmalo o acláralo hablando.'}</p></>}
         {current.status === 'ASKED' && !suggestion && <div className="brody-listening" role="status">
-          <p>{!micOn ? 'Tu micrófono está apagado. Puedes activarlo y responder tú mismo; no necesitas otro participante.' : working ? 'Estoy analizando la transcripción para identificar la respuesta…' : analyzedSinceAsked ? 'El último lote ya se analizó. Sigo atento a los nuevos fragmentos de la respuesta; puedes continuar hablando.' : 'Responde en voz alta y haz una pausa. Cuando llegue el texto confirmado, buscaré la respuesta y la guardaré si es clara. Si tengo dudas, te pediré aclaración.'}</p>
+          <p>{!micOn ? 'Tu micrófono está apagado. Puedes activarlo y responder tú mismo; no necesitas otro participante.' : retrying ? 'Hubo una interrupción del servicio de IA. Reintentaré automáticamente tras la espera indicada.' : working ? 'Estoy analizando la transcripción para identificar la respuesta…' : analyzedSinceAsked ? 'El último lote ya se analizó. Sigo atento a los nuevos fragmentos de la respuesta; puedes continuar hablando.' : 'Responde en voz alta y haz una pausa. Cuando llegue el texto confirmado, buscaré la respuesta y la guardaré si es clara. Si tengo dudas, te pediré aclaración.'}</p>
           <p><strong>Último texto recibido:</strong> {transcriptText || 'Todavía no llega texto del audio. Comprueba el micrófono y sus permisos.'}</p>
           {failed && <p>El análisis falló. Reintenta con «Analizar ahora» o escribe la respuesta.</p>}
         </div>}
