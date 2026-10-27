@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import type { BrodyVoiceState, QuestionDto } from '@requimeet/contracts';
+import type { BrodyVoiceState, BrodyUtteranceDto, QuestionDto } from '@requimeet/contracts';
 import { api, SERVER_URL } from '../../lib/api';
 import { useResource } from '../workspace/useResource';
 import { VoicePlayer } from './voice-player';
 
-export default function BrodyVoice({ code, token, canEdit, connected, speaking, refreshVersion, question }: {
-  code: string; token: string; canEdit: boolean; connected: boolean; speaking: boolean; refreshVersion: number; question?: QuestionDto;
+export default function BrodyVoice({ code, token, canEdit, connected, speaking, refreshVersion, question, onReply }: {
+  code: string; token: string; canEdit: boolean; connected: boolean; speaking: boolean; refreshVersion: number; question?: QuestionDto; onReply?: (reply: BrodyUtteranceDto | null) => void;
 }) {
   const resource = useResource<BrodyVoiceState>(`/meetings/${code}/voice`, token, refreshVersion);
   const state = resource.data;
@@ -20,10 +20,16 @@ export default function BrodyVoice({ code, token, canEdit, connected, speaking, 
   const latest = state?.latest;
   const obsoleteQuestion = latest?.kind === 'question' && (!question || !['PENDING', 'ASKED'].includes(question.status) || !latest.key.startsWith(`question:${question.id}:`));
   const allowed = Boolean(listening && connected && state?.enabled && (canEdit || state.shared));
+  useEffect(() => {
+    onReply?.(latest?.kind === 'reply' && latest.status === 'ready' ? latest : null);
+  }, [latest?.id, latest?.status, latest?.text, onReply]);
   async function unlock() {
     try {
       if (!player.current) player.current = new VoicePlayer(new AudioContext(), setPlaying);
-      await player.current.unlock(); setListening(true); setError('');
+      const activePlayer = player.current;
+      await activePlayer.unlock();
+      if (player.current !== activePlayer) return false;
+      setListening(true); setError('');
       return true;
     } catch { setError('El navegador no permitió reproducir audio. Pulsa Escuchar a Brody para reintentar.'); return false; }
   }
@@ -41,25 +47,30 @@ export default function BrodyVoice({ code, token, canEdit, connected, speaking, 
     if (!allowed) player.current?.clear();
   }, [speaking, allowed]);
   useEffect(() => {
+    setListening(false); setPlaying(false); setError(''); mountedAt.current = Date.now();
     return () => { player.current?.dispose(); player.current = undefined; seen.current.clear(); requested.current.clear(); };
   }, [code, token]);
   useEffect(() => {
     if (!allowed || obsoleteQuestion || !latest || latest.status !== 'ready' || seen.current.has(latest.id) || new Date(latest.createdAt).getTime() < mountedAt.current - 5000) return;
+    const activePlayer = player.current;
+    if (!activePlayer) return;
     const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 15000);
     let expired: ReturnType<typeof setTimeout> | undefined;
     const load = async () => {
       try {
         const response = await fetch(`${SERVER_URL}/api/meetings/${code}/voice/${latest.id}/audio`, { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal });
         if (!response.ok) throw new Error('No se pudo cargar la voz de Brody.');
-        const buffer = await player.current!.context.decodeAudioData(await response.arrayBuffer());
-        if (controller.signal.aborted) return;
-        seen.current.add(latest.id); player.current?.load(buffer);
-        expired = setTimeout(() => player.current?.clear(), 60000);
-      } catch (e) { if (!controller.signal.aborted) setError(e instanceof Error ? e.message : 'No se pudo reproducir la voz.'); }
+        const bytes = await response.arrayBuffer();
+        if (controller.signal.aborted || player.current !== activePlayer) return;
+        const buffer = await activePlayer.context.decodeAudioData(bytes);
+        if (controller.signal.aborted || player.current !== activePlayer) return;
+        seen.current.add(latest.id); activePlayer.load(buffer); setError('');
+        expired = setTimeout(() => activePlayer.clear(), 60000);
+      } catch (e) { if (!controller.signal.aborted && player.current === activePlayer) setError('No se pudo reproducir la voz. Silencia y vuelve a pulsar «Escuchar a Brody».'); }
       finally { clearTimeout(timeout); }
     };
     void load();
-    return () => { controller.abort(); clearTimeout(timeout); clearTimeout(expired); player.current?.clear(); };
+    return () => { controller.abort(); clearTimeout(timeout); clearTimeout(expired); activePlayer.clear(); };
   }, [latest?.id, latest?.status, allowed, obsoleteQuestion, code, token]);
   useEffect(() => {
     if (!canEdit || !allowed || speaking || !question || !['PENDING', 'ASKED'].includes(question.status) || question.answerSuggestion || latest?.status === 'generating') return;
@@ -75,14 +86,16 @@ export default function BrodyVoice({ code, token, canEdit, connected, speaking, 
     return () => clearTimeout(timer);
   }, [canEdit, allowed, speaking, question?.id, question?.version, question?.text, question?.status, latest?.id, latest?.status, code, token]);
   return <div className="brody-voice" aria-label="Voz de Brody">
-    <div className="brody-actions">
-      {canEdit && <button className="secondary" disabled={busy || !state?.available || !connected} aria-pressed={state?.enabled ?? false} onClick={() => void configure(!state?.enabled, state?.shared ?? false)}>{state?.enabled ? 'Desactivar voz' : 'Activar voz de Brody'}</button>}
+    <div className="brody-voice-toolbar">
+      {!state?.enabled && canEdit && <button className="secondary" disabled={busy || !state?.available || !connected} onClick={() => void configure(true, state?.shared ?? false)}>Activar voz de Brody</button>}
       {state?.enabled && (canEdit || state.shared) && <button className="secondary" aria-pressed={listening} onClick={() => { if (listening) { setListening(false); player.current?.clear(); } else void unlock(); }}>{listening ? 'Silenciar en mi equipo' : 'Escuchar a Brody'}</button>}
+      {canEdit && <details className="brody-voice-options"><summary>Opciones de voz</summary>
+        <label><input type="checkbox" checked={state?.shared ?? false} disabled={busy || !state?.enabled} onChange={e => void configure(true, e.target.checked)} /> Compartir voz con todos</label>
+        <p>Los participantes pueden activar el audio en su equipo.</p>
+        {state?.enabled && <button className="secondary" disabled={busy} onClick={() => void configure(false, state.shared)}>Desactivar voz</button>}
+      </details>}
     </div>
-    {canEdit && state?.enabled && <label><input type="checkbox" checked={state.shared} disabled={busy} onChange={e => void configure(true, e.target.checked)} /> Compartir voz con todos</label>}
-    {!state?.enabled && <p className="brody-count">Activa la voz para que Brody responda cuando lo menciones.</p>}
-    {state?.enabled && <p className="brody-notice" role="status">{playing ? 'Brody está hablando' : speaking ? 'Brody espera a que terminen de hablar' : latest?.status === 'generating' ? 'Preparando la voz…' : 'Menciona a Brody para hablar con él.'}{state.shared ? ' Voz compartida: cada participante puede activar su audio con «Escuchar a Brody».' : canEdit ? ' Solo tú escuchas su voz.' : ''}</p>}
-    {latest?.kind === 'reply' && latest.text && <p className="brody-bubble" aria-live="polite">{latest.text}</p>}
+    <p className="brody-voice-status" role="status">{!state?.enabled ? 'Voz desactivada' : playing ? 'Brody está hablando' : speaking ? 'Escuchando; la voz espera tu pausa' : latest?.status === 'generating' ? 'Preparando la voz…' : listening ? state.shared ? 'Voz para todos · di «Brody» para llamarlo' : 'Voz solo para ti · di «Brody» para llamarlo' : 'Pulsa Escuchar a Brody para activar el audio'}</p>
     {(error || resource.error || latest?.error) && <p role="alert">{error || resource.error || latest?.error}</p>}
   </div>;
 }
