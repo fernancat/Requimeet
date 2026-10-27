@@ -4,3 +4,5 @@ export * from './events';
 
 export * from './workspace';
 export * from './entity-diagram';
+
+export * from './voice';

@@ -8,4 +8,5 @@ Object.assign(process.env, {
   INTERNAL_SHARED_SECRET: '',
   OPENROUTER_API_KEY: '',
   DEEPGRAM_API_KEY: '',
+  ELEVENLABS_API_KEY: '',
 });

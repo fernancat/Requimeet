@@ -18,6 +18,11 @@ model HostUser {
 }
 
 model Meeting {
+  voiceEnabled Boolean @default(false)
+  voiceShared Boolean @default(false)
+  voiceVersion Int @default(1)
+  voiceSince DateTime?
+  utterances BrodyUtterance[]
   id                 String              @id @default(uuid())
   code               String              @unique
   title              String
@@ -205,4 +210,19 @@ model Artifact {
  createdAt DateTime @default(now())
  updatedAt DateTime @updatedAt
  @@index([meetingId, kind])
+}
+
+model BrodyUtterance {
+ id String @id @default(uuid())
+ meetingId String
+ meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+ key String
+ kind String
+ text String @default("")
+ status String @default("generating")
+ error String?
+ audio Bytes?
+ createdAt DateTime @default(now())
+ @@unique([meetingId, key])
+ @@index([meetingId, createdAt])
 }
