@@ -416,3 +416,11 @@ El navegador puede exigir una pulsación inicial en «Escuchar a Brody».
 
 Referencias: https://elevenlabs.io/docs/overview/models y
 https://elevenlabs.io/docs/eleven-api/guides/how-to/websockets/realtime-tdd.
+
+### Continuidad de lectura y acceso a detecciones
+La elegibilidad de lectura incluye preguntas PENDING y ASKED aún no escuchadas.
+La invalidez depende de identidad/cierre de la pregunta, no de una revisión de estado.
+Se reutiliza síntesis previa del mismo texto para no generar cobros por metadatos.
+Un único contenedor de desplazamiento en Brody permite llevar las detecciones a la
+vista incluso con controles de voz y respuestas largas. Nova-2 recibe el nombre Brody
+como término reforzado, conservando el texto realmente transcrito como evidencia.

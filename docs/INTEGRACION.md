@@ -373,3 +373,22 @@ Se verificó una síntesis real breve de v4 Turbo (aprox. 1,3 s para recibir aud
 Esto no mide la latencia de responder a una mención ni representa un SLA. Tras pedir
 el usuario conservar créditos, las comprobaciones restantes se realizan con proveedores
 simulados y el audio ya generado. No se afirma un consumo exacto ni saldo de la cuenta.
+
+### Corrección de continuidad de voz y panel (feature 45)
+
+Una pregunta recién propuesta puede pasar de PENDING a ASKED antes de terminar su
+síntesis o reproducción. Ambos estados permiten leer una pregunta aún no escuchada;
+los cambios sólo de estado/revisión no cortan el audio ni generan otro cobro del mismo
+texto. RESOLVED/DISCARDED siguen invalidando la lectura.
+
+Nova-2 recibe `keywords=Brody:2` para reconocer el nombre del asistente
+(https://developers.deepgram.com/docs/keywords). Esto orienta el ASR, no reemplaza
+palabras de la transcripción ni convierte cualquier «brother» en una invocación.
+Las menciones anteriores a activar la voz siguen sin reproducirse retroactivamente.
+La interfaz lo explica mientras está desactivada.
+
+El panel completo posee un único desplazamiento principal y globos acotados, evitando
+que encabezado/voz/avatar reduzcan la lista de requisitos a una franja sin contenido.
+`node scripts/verify-brody-panel.cjs` verifica «Ver aquí» con contenido largo en
+360, 768, 1366 y 1920 px, sin proveedores. Las regresiones de voz usan audio previamente
+generado; no se realizó una nueva comprobación pagada del reconocimiento de «Brody».
