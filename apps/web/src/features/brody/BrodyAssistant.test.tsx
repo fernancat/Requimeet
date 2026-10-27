@@ -84,4 +84,23 @@ describe('Brody live interaction', () => {
     expect(screen.getByText(/Haz esta pregunta con tus propias palabras/)).toBeTruthy();
   });
 
+  it('uses the spoken plan as the active interview and keeps its five questions available', async () => {
+    const planned = Array.from({ length: 5 }, (_, index) => makeQuestion(`nueva-${index}`));
+    questions = [makeQuestion('anterior', 'HIGH'), ...planned];
+    vi.mocked(api).mockImplementation(async path => {
+      if (path.endsWith('/voice')) return { enabled: true, shared: false, available: true, version: 1, planQuestionIds: planned.map(q => q.id), latest: { id: 'plan', key: 'mention:1', kind: 'reply', status: 'ready', text: 'Actualicé la guía con cinco preguntas.', questionIds: planned.map(q => q.id), createdAt: new Date().toISOString() } } as never;
+      if (path.endsWith('/questions')) return questions as never;
+      if (path.endsWith('/requirements')) return [] as never;
+      return { enabled: true, jobs: [] } as never;
+    });
+    const view = render(<BrodyAssistant {...props} />);
+    await screen.findByText('Guía de preguntas (5)');
+    fireEvent.click(screen.getByText('Volver a la pregunta sugerida'));
+    await waitFor(() => expect(view.container.querySelector('.brody-question')?.textContent).toBe('Pregunta nueva-0'));
+    questions = questions.map(q => q.id === 'nueva-0' ? { ...q, status: 'RESOLVED', version: 4 } : q);
+    view.rerender(<BrodyAssistant {...props} refreshVersion={1} />);
+    await waitFor(() => expect(view.container.querySelector('.brody-question')?.textContent).toBe('Pregunta nueva-1'));
+    expect(view.container.querySelectorAll('.brody-proposed-questions li')).toHaveLength(5);
+  });
+
 });

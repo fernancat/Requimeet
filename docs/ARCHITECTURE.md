@@ -436,3 +436,32 @@ Una descarga/decodificación captura su instancia de VoicePlayer y valida su ide
 y cancelación después de cada espera. Cambiar sala, desmontar o refrescar el módulo
 invalida respuestas pendientes y restablece la activación local de audio. Ninguna
 respuesta antigua puede acceder a un reproductor destruido ni reproducirse en otra sala.
+
+### Una guía compartida entre conversación y voz (feature 47)
+`ConversationPlanService` aplica las peticiones explícitas del anfitrión sobre las
+preguntas. La respuesta de DeepSeek contiene una intención estructurada: responder
+sin cambios o reemplazar propuestas. Una consulta tentativa/opinión no se aplica
+como una orden. Se admiten hasta ocho preguntas por petición; su orden, texto,
+fuente final y motivo se guardan en Question antes de sintetizar el audio.
+
+La transacción verifica participante propietario, reunión activa, revisión de la
+fuente, versiones de preguntas y versión de enfoque. Conserva respuestas, evidencia,
+ediciones humanas y requisitos aprobados. Las propuestas automáticas abiertas que
+se sustituyen pasan a DISCARDED con historial; no se borran. El enfoque queda en
+Meeting.brodyFocus y brodyFocusVersion. BrodyUtterance.questionIds enlaza el mensaje
+con las mismas preguntas que usan el panel y el análisis incremental, incluso si
+falla ElevenLabs. El audio anuncia la cantidad realmente guardada y la primera
+pregunta; la lista completa está en «Guía de preguntas».
+
+El análisis incremental respeta el enfoque y orden vigentes. No analiza órdenes
+explícitas de gestión de preguntas como respuestas/requisitos. Una revisión de
+focus invalida resultados antiguos antes de persistir; la actualización condicional
+bloquea la fila de Meeting hasta el commit para coordinar cambios concurrentes.
+Las preguntas humanas preservadas quedan fuera del turno activo mientras haya
+preguntas abiertas del plan nuevo. La primera pregunta ya anunciada con el plan
+no vuelve a sintetizarse como sugerencia independiente.
+
+El coordinador recibe segmentos finales cuando la voz está habilitada. Reconoce
+«Brody/Brodi» y fórmulas explícitas de petición/cambio de preguntas, sin exigir
+repetir literalmente una pregunta sugerida. Las decisiones de intención siguen
+sujetas al modelo y a la calidad de la transcripción; no son una garantía de ASR.

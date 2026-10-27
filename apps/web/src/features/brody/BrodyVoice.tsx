@@ -4,8 +4,8 @@ import { api, SERVER_URL } from '../../lib/api';
 import { useResource } from '../workspace/useResource';
 import { VoicePlayer } from './voice-player';
 
-export default function BrodyVoice({ code, token, canEdit, connected, speaking, refreshVersion, question, onReply }: {
-  code: string; token: string; canEdit: boolean; connected: boolean; speaking: boolean; refreshVersion: number; question?: QuestionDto; onReply?: (reply: BrodyUtteranceDto | null) => void;
+export default function BrodyVoice({ code, token, canEdit, connected, speaking, refreshVersion, question, onReply, onPlan }: {
+  code: string; token: string; canEdit: boolean; connected: boolean; speaking: boolean; refreshVersion: number; question?: QuestionDto; onReply?: (reply: BrodyUtteranceDto | null) => void; onPlan?: (ids: string[]) => void;
 }) {
   const resource = useResource<BrodyVoiceState>(`/meetings/${code}/voice`, token, refreshVersion);
   const state = resource.data;
@@ -21,8 +21,9 @@ export default function BrodyVoice({ code, token, canEdit, connected, speaking, 
   const obsoleteQuestion = latest?.kind === 'question' && (!question || !['PENDING', 'ASKED'].includes(question.status) || !latest.key.startsWith(`question:${question.id}:`));
   const allowed = Boolean(listening && connected && state?.enabled && (canEdit || state.shared));
   useEffect(() => {
-    onReply?.(latest?.kind === 'reply' && latest.status === 'ready' ? latest : null);
+    onReply?.(latest?.kind === 'reply' && Boolean(latest.text) ? latest : null);
   }, [latest?.id, latest?.status, latest?.text, onReply]);
+  useEffect(() => { onPlan?.(state?.planQuestionIds ?? []); }, [state?.planQuestionIds?.join(','), onPlan]);
   async function unlock() {
     try {
       if (!player.current) player.current = new VoicePlayer(new AudioContext(), setPlaying);
@@ -77,6 +78,7 @@ export default function BrodyVoice({ code, token, canEdit, connected, speaking, 
     // A spoken reply takes priority; don't read a suggestion over the answer to a mention.
     if (latest?.kind === 'reply' && Date.now() - new Date(latest.createdAt).getTime() < 30000) return;
     const key = `${question.id}:${question.text}`;
+    if (latest?.kind === 'reply' && latest.status === 'ready' && latest.questionIds?.[0] === question.id) { requested.current.add(key); return; }
     if (requested.current.has(key)) return;
     const timer = setTimeout(() => {
       requested.current.add(key);

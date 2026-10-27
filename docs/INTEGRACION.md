@@ -404,3 +404,22 @@ decodificación. `verify-brody-panel.cjs` comprueba un solo globo, textos largos
 acceso a requisitos en 360/768/1366/1920 px. Verificación final: 69 tests web y build,
 más voz compartida/interrupciones en navegador con un MP3 existente; cero llamadas
 adicionales a proveedores en estas pruebas.
+
+### Guía conversacional compartida (feature 47)
+Aplicar `20261027020000_conversation_focus` y regenerar Prisma. Con la voz activa,
+«Brody, hazme cinco preguntas clave sobre permisos» puede sustituir propuestas
+abiertas por cinco preguntas vinculadas a esa petición. «¿Qué te parece cambiarlo?»
+se discute sin aplicar cambios; el anfitrión puede ordenar después el nuevo enfoque.
+Invitados pueden consultar, pero no cambiarlo mediante comandos hablados.
+
+El panel muestra la guía completa y avanza en ese orden. La voz anuncia el cambio
+y la primera pregunta; las siguientes se leen conforme avanza la entrevista. Un
+fallo de TTS no pierde el texto ni revierte las preguntas ya guardadas. No se repiten
+síntesis por publicar el mismo plan. Hasta ocho preguntas por petición; no se cambian
+acuerdos ni requisitos aprobados.
+
+Validación con proveedores simulados: cinco preguntas ordenadas, preservación de
+decisiones, permisos, rollback por conflicto, descarte de análisis obsoleto, fallo
+TTS después de guardar la guía y continuidad del panel. No se consumen créditos
+de ElevenLabs en estas pruebas; la interpretación real de intenciones no se volvió
+a probar contra proveedores por la restricción de presupuesto del usuario.

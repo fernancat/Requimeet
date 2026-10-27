@@ -26,10 +26,13 @@ export default function BrodyAssistant({ code, token, canEdit, refreshVersion, i
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [planIds, setPlanIds] = useState<string[]>([]);
   const [voiceReply, setVoiceReply] = useState<BrodyUtteranceDto | null>(null);
   const [dismissedReply, setDismissedReply] = useState<string>();
   const [expandedMessage, setExpandedMessage] = useState(false);
-  const current = nextQuestion(visibleQuestions.data ?? [], deferred, currentId);
+  useEffect(() => { if (voiceReply?.questionIds?.length) { setCurrentId(voiceReply.questionIds[0]); setDeferred([]); } }, [voiceReply?.id]);
+  const planOpen = (visibleQuestions.data ?? []).filter(q => planIds.includes(q.id) && !deferred.includes(q.id) && ['PENDING', 'ASKED'].includes(q.status)).sort((a, b) => planIds.indexOf(a.id) - planIds.indexOf(b.id));
+  const current = planOpen.length ? planOpen.find(q => q.id === currentId) ?? planOpen[0] : nextQuestion(visibleQuestions.data ?? [], deferred, currentId);
   useEffect(() => { setCurrentId(current?.id); }, [current?.id]);
   useUnsaved(Object.values(answers).some(answer => answer.trim().length > 0));
   const { working, failed, retrying, queued, error: analysisFailure } = analysisState(analysis.data);
@@ -88,7 +91,7 @@ export default function BrodyAssistant({ code, token, canEdit, refreshVersion, i
   const state = visibleQuestions.holding ? 'Te escucho; seguimos cuando hagas una pausa' : interrupted ? 'Audio interrumpido' : !connected ? 'Conectando a la reunión' : !analysis.data ? 'Conectando con el asistente' : !analysis.data.enabled ? 'IA no disponible' : analysis.error ? 'No puedo consultar el estado del análisis' : failed ? 'El análisis necesita atención' : retrying ? 'Esperando para reintentar el análisis' : queued ? 'Preparando el análisis' : working ? 'Analizando lo conversado…' : current ? 'Tengo una sugerencia' : 'Esperando nuevos resultados';
   return <section className="brody-assistant" data-speaking={speaking} data-turn-held={visibleQuestions.holding} aria-label="Brody, asistente en vivo">
     <header className="brody-heading"><Suspense fallback={<div className="brody-avatar" />}><BrodyAvatar /></Suspense><div><h2>Brody</h2><span role="status">{state}</span></div><span className="brody-live">En vivo</span></header>
-    <BrodyVoice code={code} token={token} canEdit={canEdit} connected={connected} speaking={speaking} refreshVersion={refreshVersion} question={current} onReply={setVoiceReply} />
+    <BrodyVoice code={code} token={token} canEdit={canEdit} connected={connected} speaking={speaking} refreshVersion={refreshVersion} question={current} onReply={setVoiceReply} onPlan={setPlanIds} />
     <div className="brody-conversation">
       <div className={`brody-bubble ${expandedMessage ? 'expanded' : 'compact'}`} aria-live="polite" aria-atomic="true">
         {showReply ? <><h3>Brody responde</h3><p className="brody-question">{voiceReply.text}</p>{current && <button className="brody-return" onClick={() => setDismissedReply(voiceReply.id)}>Volver a la pregunta sugerida</button>}</> : current ? <><h3>{suggestion ? 'Necesito aclarar esta respuesta' : current.status === 'ASKED' ? (micOn ? 'Esperando una respuesta hablada' : 'Activa el micrófono para responder') : 'Ahora podrías preguntar'}</h3><p className="brody-question">{suggestion?.text ?? current.text}</p></>
@@ -96,6 +99,10 @@ export default function BrodyAssistant({ code, token, canEdit, refreshVersion, i
         {mainText.length > 240 && <button className="brody-return" aria-expanded={expandedMessage} onClick={() => setExpandedMessage(value => !value)}>{expandedMessage ? 'Resumir vista' : 'Leer completo'}</button>}
       </div>
     </div>
+    {!!planIds.length && <details className="brody-agenda" open={showReply && !!voiceReply.questionIds?.length || undefined}>
+      <summary>Guía de preguntas ({planIds.length})</summary>
+      <ol className="brody-proposed-questions">{planIds.map(id => { const item = questions.data?.find(q => q.id === id); return item ? <li key={id}>{item.text}{item.status === 'RESOLVED' && <small> · Respondida</small>}</li> : null; })}</ol>
+    </details>}
     {detected.length > 0 && <button className="secondary brody-detection-alert" onClick={() => detectionsRef.current?.scrollIntoView({ block: 'nearest', behavior: 'instant' })}><span role="status">{detected.length} requerimientos detectados</span> · Ver aquí</button>}
       {(error || questions.error || requirements.error || analysis.error) && <p role="alert">{error || questions.error || requirements.error || analysis.error}</p>}
       {failed && <p role="alert">{analysisFailure || 'El último análisis falló.'} Los resultados guardados se conservan. Puedes reintentarlo con «Analizar ahora».</p>}

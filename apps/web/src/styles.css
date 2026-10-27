@@ -1040,6 +1040,10 @@ legend { padding: 0 8px; font-weight: 600; }
 .brody-bubble p { margin: 0; line-height: 1.5; }
 .brody-bubble.compact .brody-question { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
 .brody-question { font-size: 17px; line-height: 1.5; }
+.brody-agenda { padding: 8px 0 12px; font-size: 13px; }
+.brody-agenda summary { cursor: pointer; padding: 8px 0; }
+.brody-proposed-questions { padding-left: 22px; margin: 12px 0; font-size: 14px; line-height: 1.5; }
+.brody-proposed-questions li + li { margin-top: 8px; }
 .brody-return { display: block; margin-top: 12px; padding: 6px 0; border: 0; background: transparent; color: #203a2b; text-decoration: underline; text-underline-offset: 3px; text-align: left; }
 .brody-scroll { min-width: 0; overflow: visible; }
 .brody-scroll p { line-height: 1.5; overflow-wrap: anywhere; }
