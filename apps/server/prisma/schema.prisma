@@ -18,6 +18,8 @@ model HostUser {
 }
 
 model Meeting {
+  brodyFocus String @default("")
+  brodyFocusVersion Int @default(0)
   voiceEnabled Boolean @default(false)
   voiceShared Boolean @default(false)
   voiceVersion Int @default(1)
@@ -213,6 +215,7 @@ model Artifact {
 }
 
 model BrodyUtterance {
+ questionIds String[] @default([])
  id String @id @default(uuid())
  meetingId String
  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
