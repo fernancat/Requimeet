@@ -376,3 +376,43 @@ trabajos de documento/entidades. El frontend distingue ejecución, cola, espera 
 reintento y fallo. `useResource` agrupa ráfagas de eventos en una lectura adicional,
 publica la lectura en curso y limita cada consulta a ocho segundos. Cambiar de
 reunión cancela la lectura anterior, conservando el aislamiento entre salas.
+
+## Voz conversacional de Brody (feature 44)
+
+`VoiceModule` añade voz opcional, desactivada inicialmente. ElevenLabs usa exclusivamente
+`eleven_v4_turbo` por Text to Dialogue WebSocket (registro `voices`, `inputs`,
+`close_socket`, confirmación `is_final`). No sustituye Deepgram ni DeepSeek.
+La clave permanece en el servidor. El catálogo requiere permisos distintos de síntesis;
+no se exige `models_read`/`voices_read` para generar audio.
+
+El anfitrión habilita voz privada o compartida con versión esperada. Cada intervención
+se guarda en `BrodyUtterance` y se anuncia por `workspace:changed` con recurso `voice`.
+El audio se descarga mediante REST autenticado; sólo el propietario puede obtenerlo
+si no se comparte. Invitados deben seguir admitidos; la reunión debe estar activa.
+No hay URL pública de audio ni texto arbitrario enviado por el cliente para sintetizar.
+
+Las preguntas pendientes se leen una vez por ID/revisión. Una mención final a «Brody»
+o «Brodi» genera una respuesta breve de DeepSeek con transcripción reciente, preguntas
+y requisitos de esa reunión. No ejecuta acciones ni aprueba requisitos. Se agrupan
+finales durante 1,2 segundos; parciales y menciones anteriores a la activación no disparan
+respuestas. Una ejecución por reunión y claves persistentes evitan reintentos duplicados.
+Errores son terminales y visibles; no se reintenta automáticamente una síntesis cobrada.
+Al reiniciar se marcan generaciones inconclusas como fallidas.
+
+Cada navegador reproduce localmente con Web Audio, después de 1,2 segundos continuos
+sin hablantes activos de LiveKit. Si detecta voz humana, pausa inmediatamente y reanuda
+tras otra pausa; una intervención nueva reemplaza la anterior. Desactivar, desconectar,
+salir o revocar acceso compartido detiene la reproducción. Preguntas ya realizadas o
+revisadas no siguen leyéndose. El audio nunca se publica como micrófono: se evita la
+realimentación digital al processor. La detección tiene la latencia propia del evento
+LiveKit; no garantiza cero solapamiento físico ni elimina eco acústico de altavoces.
+
+Audio máximo 2 MiB y generación limitada a 18 segundos. El servidor conserva audio
+hasta dos minutos y lo purga cada minuto; texto/estado permanecen como historial.
+El navegador sólo recupera intervenciones recientes, no reproduce un historial al
+entrar, y descarta audio pendiente a los 60 segundos. La reproducción compartida sigue
+el turno observado por cada navegador, sin sincronización exacta entre dispositivos.
+El navegador puede exigir una pulsación inicial en «Escuchar a Brody».
+
+Referencias: https://elevenlabs.io/docs/overview/models y
+https://elevenlabs.io/docs/eleven-api/guides/how-to/websockets/realtime-tdd.

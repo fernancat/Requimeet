@@ -343,3 +343,33 @@ https://openrouter.ai/docs/guides/features/structured-outputs
 https://openrouter.ai/docs/api_reference/errors-and-debugging
 https://openrouter.ai/docs/api_reference/streaming
 https://openrouter.ai/docs/guides/routing/provider-selection
+
+## Voz de Brody — Eleven v4 Turbo
+
+1. Aplicar migraciones (`npm run prisma:deploy -w apps/server`) y regenerar Prisma.
+2. Configurar `ELEVENLABS_API_KEY` sólo en `apps/server/.env`, con permisos de Text to
+   Speech. `ELEVENLABS_VOICE_ID` es opcional; por defecto se usa la voz documentada
+   `21m00Tcm4TlvDq8ikWAM`. El modelo está fijado en `eleven_v4_turbo`, sin fallback.
+3. En la sala, el anfitrión pulsa «Activar voz de Brody». «Compartir voz con todos»
+   habilita acceso para participantes admitidos. Cada navegador puede necesitar
+   «Escuchar a Brody» una vez; «Silenciar en mi equipo» sólo afecta a ese dispositivo.
+4. Mencionar «Brody» en voz alta con la transcripción activa. Responde usando el
+   contexto confirmado. La voz está apagada inicialmente y sólo lee preguntas nuevas
+   o responde a menciones; no narra todos los eventos de la interfaz.
+
+REST: GET/PATCH `/meetings/:code/voice`, POST `/meetings/:code/voice/question`
+(con `questionId`/`version`), GET `/meetings/:code/voice/:id/audio`. Ajustes requieren
+`enabled`, `shared` y `version`. Audio MP3 privado con `Cache-Control: no-store`.
+No se necesita configuración de ElevenLabs en frontend o processor.
+
+Validación sin créditos: `npm test`; con Vite activo y un MP3 ya disponible,
+`node scripts/verify-brody-tts-browser.cjs /ruta/fixture.mp3` prueba dos clientes,
+turnos, voz compartida y vista de 360 px simulando REST. No llama a proveedores.
+La prueba de integración real `verify-brody-tts.cjs` exige deliberadamente la bandera
+`--real-providers` y un clip sintético con una mención. No ejecutar sin autorización
+para consumir créditos. No utiliza un micrófono físico.
+
+Se verificó una síntesis real breve de v4 Turbo (aprox. 1,3 s para recibir audio completo).
+Esto no mide la latencia de responder a una mención ni representa un SLA. Tras pedir
+el usuario conservar créditos, las comprobaciones restantes se realizan con proveedores
+simulados y el audio ya generado. No se afirma un consumo exacto ni saldo de la cuenta.
