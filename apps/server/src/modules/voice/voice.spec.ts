@@ -1,3 +1,4 @@
+import { ConversationPlanService } from '../ai/conversation-plan.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { VoiceService, mentionsBrody } from './voice.service';
 import { MeetingAccessService } from '../meetings/meeting-access.service';
@@ -9,10 +10,10 @@ import { cleanDb, createTestPrisma } from '../../test-utils/test-db';
 describe('Brody voice authorization, generation and wake requests', () => {
   const prisma = createTestPrisma();
   const eleven = { enabled: () => true, synthesize: jest.fn(async () => Buffer.from('audio')) };
-  const router = { generate: jest.fn(async () => ({ text: 'Podemos aclarar quién autoriza los cambios.' })) };
+  const router = { generate: jest.fn(async () => ({ text: 'Podemos aclarar quién autoriza los cambios.', action: 'reply', focus: '', questions: [] })) };
   const events = new EventEmitter2();
   const access = new MeetingAccessService(prisma as PrismaService);
-  const service = new VoiceService(prisma as PrismaService, access, eleven as unknown as ElevenLabsService, router as unknown as OpenRouterService, events);
+  const service = new VoiceService(prisma as PrismaService, access, eleven as unknown as ElevenLabsService, router as unknown as OpenRouterService, events, new ConversationPlanService(prisma as PrismaService));
   let code: string, meetingId: string, caller: { kind: 'host'; hostUserId: string }, guest: { kind: 'guest'; guestSessionId: string }, questionId: string;
   beforeAll(() => prisma.$connect());
   afterAll(async () => { service.onModuleDestroy(); await cleanDb(prisma); await prisma.$disconnect(); });
@@ -67,6 +68,19 @@ describe('Brody voice authorization, generation and wake requests', () => {
     const result = await service.question(code, caller, { questionId, version: 1 });
     expect(result.latest?.status).toBe('failed'); expect(result.latest?.error).not.toContain('private');
     await service.question(code, caller, { questionId, version: 1 }); expect(eleven.synthesize).toHaveBeenCalledTimes(1);
+  });
+  it('a spoken host direction updates the same questions that are read aloud, even if TTS fails', async () => {
+    const speaker = await prisma.participant.create({ data: { meetingId, hostUserId: caller.hostUserId, displayName: 'Host', role: 'host' } });
+    await prisma.transcriptSegment.create({ data: { meetingId, participantId: speaker.id, resultId: 'plan', text: 'Hazme cinco preguntas clave sobre validaciones', isFinal: true, createdAtMs: Date.now() } });
+    router.generate.mockResolvedValueOnce({ text: 'Preparé la guía', action: 'replace_questions', focus: 'Validaciones', questions: Array.from({ length: 5 }, (_, i) => ({ text: `¿Qué validación aplica en el paso ${i}?`, reason: 'Aclarar proceso' })) } as never);
+    eleven.synthesize.mockRejectedValueOnce(new Error('provider unavailable'));
+    await (service as any).respond(meetingId);
+    const state = await service.state(code, caller);
+    expect(state.planQuestionIds).toHaveLength(5);
+    expect(state.latest?.questionIds).toEqual(state.planQuestionIds);
+    expect(state.latest).toMatchObject({ status: 'failed', text: expect.stringContaining('5 preguntas') });
+    expect(await prisma.question.count({ where: { meetingId, status: 'PENDING' } })).toBe(5);
+    await (service as any).respond(meetingId); expect(router.generate).toHaveBeenCalledTimes(1);
   });
   it('recognizes the assistant name as a word, not arbitrary fragments', () => {
     expect(mentionsBrody('Oye Brody, ¿qué sigue?')).toBe(true);
