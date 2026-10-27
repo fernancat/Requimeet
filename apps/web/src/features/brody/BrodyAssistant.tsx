@@ -1,3 +1,4 @@
+import BrodyVoice from './BrodyVoice';
 import { analysisState } from './analysis-state';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import type { AnalysisStatus, QuestionDto, QuestionStatus } from '@requimeet/contracts';
@@ -81,6 +82,7 @@ export default function BrodyAssistant({ code, token, canEdit, refreshVersion, i
   const state = visibleQuestions.holding ? 'Te escucho; seguimos cuando hagas una pausa' : interrupted ? 'Audio interrumpido' : !connected ? 'Conectando a la reunión' : !analysis.data ? 'Conectando con el asistente' : !analysis.data.enabled ? 'IA no disponible' : analysis.error ? 'No puedo consultar el estado del análisis' : failed ? 'El análisis necesita atención' : retrying ? 'Esperando para reintentar el análisis' : queued ? 'Preparando el análisis' : working ? 'Analizando lo conversado…' : current ? 'Tengo una sugerencia' : 'Esperando nuevos resultados';
   return <section className="brody-assistant" data-speaking={speaking} data-turn-held={visibleQuestions.holding} aria-label="Brody, asistente en vivo">
     <header className="brody-heading"><div><h2>Brody</h2><span role="status">{state}</span></div><span className="brody-live">En vivo</span></header>
+    <BrodyVoice code={code} token={token} canEdit={canEdit} connected={connected} speaking={speaking} refreshVersion={refreshVersion} question={current} />
     <div className="brody-conversation">
       <Suspense fallback={<div className="brody-avatar" />}><BrodyAvatar /></Suspense>
       <div className="brody-bubble" aria-live="polite" aria-atomic="true">

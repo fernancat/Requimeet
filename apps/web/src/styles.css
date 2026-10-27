@@ -1759,3 +1759,9 @@ legend { padding: 0 8px; font-weight: 600; }
     padding: 10px 24px 30px;
   }
 }
+
+.brody-voice { min-width: 0; padding: .65rem 0; }
+.brody-voice label { display: flex; align-items: center; gap: .5rem; padding: .4rem 0; }
+.brody-voice input[type="checkbox"] { width: 1.1rem; height: 1.1rem; flex-shrink: 0; }
+.brody-voice button { white-space: normal; min-height: 40px; }
+.brody-voice p { overflow-wrap: anywhere; }
