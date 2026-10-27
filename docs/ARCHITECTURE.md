@@ -424,3 +424,15 @@ Se reutiliza síntesis previa del mismo texto para no generar cobros por metadat
 Un único contenedor de desplazamiento en Brody permite llevar las detecciones a la
 vista incluso con controles de voz y respuestas largas. Nova-2 recibe el nombre Brody
 como término reforzado, conservando el texto realmente transcrito como evidencia.
+
+### Panel unificado y ciclo de vida de audio (feature 46)
+Brody mantiene una sola intervención principal: la respuesta a una mención tiene
+prioridad sobre la sugerencia, con una acción para volver a esta. El avatar vive en el
+encabezado; los ajustes de voz y la edición avanzada usan divulgación progresiva.
+Los requisitos permanecen delante del historial/formularios. Texto largo se amplía
+con «Leer completo», sin barras de desplazamiento dentro del globo.
+
+Una descarga/decodificación captura su instancia de VoicePlayer y valida su identidad
+y cancelación después de cada espera. Cambiar sala, desmontar o refrescar el módulo
+invalida respuestas pendientes y restablece la activación local de audio. Ninguna
+respuesta antigua puede acceder a un reproductor destruido ni reproducirse en otra sala.

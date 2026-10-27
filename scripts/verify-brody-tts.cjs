@@ -48,6 +48,7 @@ async function pageFor(user) {
   browser=await chromium.launch({headless:true,args:['--enable-unsafe-swiftshader','--autoplay-policy=no-user-gesture-required','--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream']});
   const hp=await pageFor(host),gp=await pageFor(guest);
   await hp.getByRole('button',{name:'Activar voz de Brody'}).click({timeout:30000});
+  await hp.getByText('Opciones de voz', {exact:true}).click();
   await hp.getByLabel('Compartir voz con todos').click();
   await waitFor(()=>hp.getByLabel('Compartir voz con todos').isChecked());
   await gp.getByRole('button',{name:'Escuchar a Brody',exact:true}).click({timeout:30000});

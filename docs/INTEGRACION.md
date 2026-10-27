@@ -392,3 +392,15 @@ que encabezado/voz/avatar reduzcan la lista de requisitos a una franja sin conte
 `node scripts/verify-brody-panel.cjs` verifica «Ver aquí» con contenido largo en
 360, 768, 1366 y 1920 px, sin proveedores. Las regresiones de voz usan audio previamente
 generado; no se realizó una nueva comprobación pagada del reconocimiento de «Brody».
+
+### Panel unificado (feature 46)
+El dinosaurio pasa al encabezado. La respuesta hablada y la pregunta sugerida se
+alternan en un único globo. «Opciones de voz» contiene compartir/desactivar; el control
+de escucha local sigue visible. «Revisar respuestas y editar» conserva los formularios
+y borradores, pero inicialmente plegados. Los requerimientos aparecen antes.
+
+Regresiones: `BrodyVoice.test.tsx` simula cambio de sala durante descarga y durante
+decodificación. `verify-brody-panel.cjs` comprueba un solo globo, textos largos y
+acceso a requisitos en 360/768/1366/1920 px. Verificación final: 69 tests web y build,
+más voz compartida/interrupciones en navegador con un MP3 existente; cero llamadas
+adicionales a proveedores en estas pruebas.

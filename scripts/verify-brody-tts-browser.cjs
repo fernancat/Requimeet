@@ -35,6 +35,7 @@ const sleep=ms=>new Promise(r=>setTimeout(r,ms));
  }
  const [host,guest]=pages;
  await host.getByRole('button',{name:'Activar voz de Brody'}).click();
+ await host.getByText('Opciones de voz', {exact:true}).click();
  await host.getByLabel('Compartir voz con todos').click();
  await host.waitForFunction(()=>document.querySelector('input[type=checkbox]')?.checked);
  await guest.evaluate(()=>window.qaRender(true));
