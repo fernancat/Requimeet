@@ -42,6 +42,8 @@ const sleep=ms=>new Promise(r=>setTimeout(r,ms));
  await sleep(1800);assert.equal(synthesis,0,'must not synthesize question while human speaks');
  await host.evaluate(()=>window.qaRender(false));
  await host.waitForFunction(()=>window.qaEvents.some(e=>e.type==='start'));
+ await host.evaluate(()=>window.qaRevise());await sleep(200);
+ assert.equal(await host.evaluate(()=>window.qaEvents.filter(e=>e.type==='stop').length),0,'a state revision must not cut off playback');
  await guest.evaluate(()=>window.qaRender(true));await sleep(1600);
  assert.equal(await guest.evaluate(()=>window.qaEvents.filter(e=>e.type==='start').length),0,'must not play arriving audio during speech');
  await guest.evaluate(()=>window.qaRender(false));
