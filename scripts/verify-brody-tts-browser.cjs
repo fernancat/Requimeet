@@ -29,6 +29,7 @@ const sleep=ms=>new Promise(r=>setTimeout(r,ms));
     src.start=function(...args){window.qaEvents.push({type:'start',speaking,at:Date.now()});return start(...args)};
     src.stop=function(...args){window.qaEvents.push({type:'stop',speaking,at:Date.now()});return stop(...args)};return src;};
    window.qaRender=(value)=>{speaking=value;root.render(React.createElement(Voice,{code:'QA',token:canEdit?'host':'guest',canEdit,connected:true,speaking,refreshVersion:++version,question:q}));};
+   window.qaRevise=()=>{q.status='ASKED';q.version=2;window.qaRender(false)};
    window.qaRender(true);
   },{canEdit,q});
  }

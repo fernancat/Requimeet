@@ -18,7 +18,7 @@ export default function BrodyVoice({ code, token, canEdit, connected, speaking, 
   const requested = useRef(new Set<string>());
   const mountedAt = useRef(Date.now());
   const latest = state?.latest;
-  const obsoleteQuestion = latest?.kind === 'question' && (question?.status !== 'PENDING' || latest.key !== `question:${question?.id}:${question?.version}`);
+  const obsoleteQuestion = latest?.kind === 'question' && (!question || !['PENDING', 'ASKED'].includes(question.status) || !latest.key.startsWith(`question:${question.id}:`));
   const allowed = Boolean(listening && connected && state?.enabled && (canEdit || state.shared));
   async function unlock() {
     try {
@@ -62,24 +62,25 @@ export default function BrodyVoice({ code, token, canEdit, connected, speaking, 
     return () => { controller.abort(); clearTimeout(timeout); clearTimeout(expired); player.current?.clear(); };
   }, [latest?.id, latest?.status, allowed, obsoleteQuestion, code, token]);
   useEffect(() => {
-    if (!canEdit || !allowed || speaking || !question || question.status !== 'PENDING' || question.answerSuggestion || latest?.status === 'generating') return;
+    if (!canEdit || !allowed || speaking || !question || !['PENDING', 'ASKED'].includes(question.status) || question.answerSuggestion || latest?.status === 'generating') return;
     // A spoken reply takes priority; don't read a suggestion over the answer to a mention.
     if (latest?.kind === 'reply' && Date.now() - new Date(latest.createdAt).getTime() < 30000) return;
-    const key = `${question.id}:${question.version}`;
+    const key = `${question.id}:${question.text}`;
     if (requested.current.has(key)) return;
     const timer = setTimeout(() => {
       requested.current.add(key);
       void api<BrodyVoiceState>(`/meetings/${code}/voice/question`, { token, method: 'POST', body: { questionId: question.id, version: question.version } })
-        .then(value => resource.setData(value)).catch(e => { setError(e instanceof Error ? e.message : 'No se pudo preparar la voz.'); });
+        .then(value => resource.setData(value)).catch(e => { requested.current.delete(key); setError(e instanceof Error ? e.message : 'No se pudo preparar la voz.'); });
     }, 1200);
     return () => clearTimeout(timer);
-  }, [canEdit, allowed, speaking, question?.id, question?.version, question?.status, latest?.id, latest?.status, code, token]);
+  }, [canEdit, allowed, speaking, question?.id, question?.version, question?.text, question?.status, latest?.id, latest?.status, code, token]);
   return <div className="brody-voice" aria-label="Voz de Brody">
     <div className="brody-actions">
       {canEdit && <button className="secondary" disabled={busy || !state?.available || !connected} aria-pressed={state?.enabled ?? false} onClick={() => void configure(!state?.enabled, state?.shared ?? false)}>{state?.enabled ? 'Desactivar voz' : 'Activar voz de Brody'}</button>}
       {state?.enabled && (canEdit || state.shared) && <button className="secondary" aria-pressed={listening} onClick={() => { if (listening) { setListening(false); player.current?.clear(); } else void unlock(); }}>{listening ? 'Silenciar en mi equipo' : 'Escuchar a Brody'}</button>}
     </div>
     {canEdit && state?.enabled && <label><input type="checkbox" checked={state.shared} disabled={busy} onChange={e => void configure(true, e.target.checked)} /> Compartir voz con todos</label>}
+    {!state?.enabled && <p className="brody-count">Activa la voz para que Brody responda cuando lo menciones.</p>}
     {state?.enabled && <p className="brody-notice" role="status">{playing ? 'Brody está hablando' : speaking ? 'Brody espera a que terminen de hablar' : latest?.status === 'generating' ? 'Preparando la voz…' : 'Menciona a Brody para hablar con él.'}{state.shared ? ' Voz compartida: cada participante puede activar su audio con «Escuchar a Brody».' : canEdit ? ' Solo tú escuchas su voz.' : ''}</p>}
     {latest?.kind === 'reply' && latest.text && <p className="brody-bubble" aria-live="polite">{latest.text}</p>}
     {(error || resource.error || latest?.error) && <p role="alert">{error || resource.error || latest?.error}</p>}

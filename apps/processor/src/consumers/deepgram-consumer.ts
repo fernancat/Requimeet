@@ -135,6 +135,7 @@ export class DeepgramConsumer implements MediaConsumer {
   private openStream(frame: AudioFrame): TrackStream {
     const params = new URLSearchParams({
       model: MODEL,
+      keywords: 'Brody:2',
       language: LANGUAGE,
       encoding: 'linear16',
       sample_rate: String(frame.sampleRateHz),

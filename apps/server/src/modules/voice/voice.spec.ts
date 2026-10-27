@@ -36,6 +36,14 @@ describe('Brody voice authorization, generation and wake requests', () => {
     expect((await service.audio(code, guest, first.latest!.id)).toString()).toBe('audio');
     await expect(service.configure(code, caller, { enabled: false, shared: true, version: 1 })).rejects.toMatchObject({ status: 409 });
   });
+  it('reads an unheard ASKED question and does not synthesize again on state-only revisions', async () => {
+    await prisma.question.update({ where: { id: questionId }, data: { status: 'ASKED', version: 2 } });
+    const first = await service.question(code, caller, { questionId, version: 2 });
+    expect(first.latest?.status).toBe('ready');
+    await prisma.question.update({ where: { id: questionId }, data: { version: 3 } });
+    await service.question(code, caller, { questionId, version: 3 });
+    expect(eleven.synthesize).toHaveBeenCalledTimes(1);
+  });
   it('rejects foreign questions, expired audio, removed participants and stale versions', async () => {
     await expect(service.question(code, caller, { questionId: 'foreign', version: 1 })).rejects.toMatchObject({ status: 409 });
     const state = await service.question(code, caller, { questionId, version: 1 });

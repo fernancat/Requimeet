@@ -54,8 +54,11 @@ export class VoiceService implements OnModuleInit, OnModuleDestroy {
     if (!meeting.voiceEnabled || meeting.status !== 'active') throw new ConflictException('La voz no está activa.');
     const parsed = z.object({ questionId: z.string().min(1), version: z.number().int().positive() }).strict().safeParse(body);
     if (!parsed.success) throw new BadRequestException('Pregunta inválida.');
-    const q = await this.prisma.question.findFirst({ where: { id: parsed.data.questionId, meetingId: meeting.id, version: parsed.data.version, status: 'PENDING' } });
+    const q = await this.prisma.question.findFirst({ where: { id: parsed.data.questionId, meetingId: meeting.id, version: parsed.data.version, status: { in: ['PENDING', 'ASKED'] } } });
     if (!q) throw new ConflictException('La pregunta ya cambió.');
+    // State-only revisions must not charge another synthesis of the same question.
+    const existing = await this.prisma.brodyUtterance.findFirst({ where: { meetingId: meeting.id, key: { startsWith: `question:${q.id}:` }, text: `Podrías preguntar: ${q.text}`.slice(0, 650), status: 'ready' } });
+    if (existing) return this.state(code, caller);
     await this.generate(meeting.id, code, `question:${q.id}:${q.version}`, 'question', async () => `Podrías preguntar: ${q.text}`.slice(0, 650));
     return this.state(code, caller);
   }
